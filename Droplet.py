@@ -30,31 +30,63 @@ DELTA_DISTRIBUTION = 0.72
 def get_shift_factor(inlet_device, rho_v_squared):
     """
     Approximates the droplet size distribution shift factor based on the inlet device
-    and inlet momentum (rho_g * V_g^2).
+    and inlet momentum (rho_g * V_g^2) from Figure 9.
+    The values are interpolated or set to a low value if beyond effective range.
     """
     if inlet_device == "No inlet device":
-        return 1.0
+        return 1.0 # No shift if no inlet device
     elif inlet_device == "Diverter plate":
-        if rho_v_squared <= 1000: return 1.0 - (0.1 * rho_v_squared / 1000)
-        elif rho_v_squared <= 2000: return 0.9 - (0.3 * (rho_v_squared - 1000) / 1000)
-        elif rho_v_squared <= 3000: return 0.6 - (0.4 * (rho_v_squared - 2000) / 1000)
-        else: return 0.2
+        # Curve starts at ~1.0, drops to ~0.6 at 2000, and near 0 by 2500
+        if rho_v_squared <= 1000:
+            return 1.0 - (0.1 * rho_v_squared / 1000)
+        elif rho_v_squared <= 2000:
+            # From (1000, 0.9) to (2000, 0.6)
+            return 0.9 - (0.3 * (rho_v_squared - 1000) / 1000)
+        elif rho_v_squared <= 2500:
+            # From (2000, 0.6) to (2500, ~0.05)
+            return 0.6 - (0.55 * (rho_v_squared - 2000) / 500)
+        else: # Beyond effective capacity, very low shift factor
+            return 0.05
     elif inlet_device == "Half-pipe":
-        if rho_v_squared <= 1000: return 1.0 - (0.1 * rho_v_squared / 1000)
-        elif rho_v_squared <= 2000: return 0.9 - (0.2 * (rho_v_squared - 1000) / 1000)
-        elif rho_v_squared <= 3000: return 0.7 - (0.2 * (rho_v_squared - 2000) / 1000)
-        elif rho_v_squared <= 4000: return 0.5 - (0.2 * (rho_v_squared - 3000) / 1000)
-        else: return 0.2
+        # Curve starts at ~1.0, drops sharply after ~1500, near 0.2 at 2000, and near 0 by 2500
+        if rho_v_squared <= 1000:
+            return 1.0 - (0.1 * rho_v_squared / 1000)
+        elif rho_v_squared <= 1500:
+            # From (1000, 0.9) to (1500, 0.7)
+            return 0.9 - (0.2 * (rho_v_squared - 1000) / 500)
+        elif rho_v_squared <= 2000:
+            # From (1500, 0.7) to (2000, 0.2)
+            return 0.7 - (0.5 * (rho_v_squared - 1500) / 500)
+        elif rho_v_squared <= 2500:
+            # From (2000, 0.2) to (2500, ~0.05)
+            return 0.2 - (0.15 * (rho_v_squared - 2000) / 500)
+        else: # Beyond effective capacity, very low shift factor as per user's example
+            return 0.05
     elif inlet_device == "Vane-type":
-        if rho_v_squared <= 5000: return 1.0 - (0.05 * rho_v_squared / 5000)
-        elif rho_v_squared <= 7000: return 0.95 - (0.15 * (rho_v_squared - 5000) / 2000)
-        elif rho_v_squared <= 10000: return 0.8 - (0.3 * (rho_v_squared - 7000) / 3000)
-        else: return 0.5
+        # Curve starts at ~1.0, drops slowly, around 0.8 at 6000, 0.5 at 10000
+        if rho_v_squared <= 5000:
+            return 1.0 - (0.05 * rho_v_squared / 5000) # Roughly 0.95 at 5000
+        elif rho_v_squared <= 7000:
+            # From (5000, ~0.95) to (7000, ~0.7)
+            # To get 0.8 at 6000: (0.95 - 0.7) / 2 = 0.125. 0.95 - 0.125 = 0.825
+            # Let's adjust points to hit 0.8 at 6000 more precisely if needed, or keep approximation
+            # For 6000, (0.95 - (0.25 * (6000-5000)/2000)) = 0.95 - 0.125 = 0.825 (closer to 0.8)
+            return 0.95 - (0.25 * (rho_v_squared - 5000) / 2000)
+        elif rho_v_squared <= 10000:
+            # From (7000, ~0.7) to (10000, ~0.5)
+            return 0.7 - (0.2 * (rho_v_squared - 7000) / 3000)
+        else:
+            return 0.5 # Stays relatively high even at higher momentum
     elif inlet_device == "Cyclonic":
-        if rho_v_squared <= 10000: return 1.0 - (0.1 * rho_v_squared / 10000)
-        elif rho_v_squared <= 14000: return 0.9 - (0.7 * (rho_v_squared - 10000) / 4000)
-        else: return 0.2
-    return 1.0
+        # Curve starts at ~1.0, very slowly drops, around 0.95 at 6000, 0.9 at 10000, 0.2 at 14000
+        if rho_v_squared <= 10000:
+            # To get 0.95 at 6000: (1.0 - (0.1 * 6000 / 10000)) = 0.94. This is close to 0.95.
+            return 1.0 - (0.1 * rho_v_squared / 10000)
+        elif rho_v_squared <= 14000:
+            return 0.9 - (0.7 * (rho_v_squared - 10000) / 4000)
+        else:
+            return 0.2 # Placeholder for very high values
+    return 1.0 # Default if an unknown inlet device is somehow selected
 
 # --- Unit Conversion Factors (for internal FPS calculation) ---
 M_TO_FT = 3.28084 # 1 meter = 3.28084 feet
