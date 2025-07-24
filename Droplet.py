@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 from scipy.special import erf
 import matplotlib.pyplot as plt
+from fpdf import FPDF # Import FPDF for PDF generation
+import io # For handling in-memory image data
 
 # --- Constants and Look-up Data (derived from the article) ---
 
@@ -129,6 +131,140 @@ def from_fps(value, unit_type):
         return value * 1.48816 # 1 lb/ft-s^2 = 1.48816 Pa
     return value
 
+# --- PDF Report Generation Function ---
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 10, 'Oil and Gas Separation: Particle Size Distribution Report', 0, 1, 'C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', 0, 0, 'C')
+
+    def chapter_title(self, title):
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 10, title, 0, 1, 'L')
+        self.ln(2)
+
+    def chapter_body(self, body):
+        self.set_font('Arial', '', 10)
+        self.multi_cell(0, 6, body)
+        self.ln()
+
+def generate_pdf_report(inputs, results, plot_image_buffer):
+    pdf = PDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+
+    # Title Page
+    pdf.set_font('Arial', 'B', 16)
+    pdf.cell(0, 20, 'Oil and Gas Separation: Particle Size Distribution Analysis', 0, 1, 'C')
+    pdf.set_font('Arial', '', 10)
+    pdf.cell(0, 10, f'Date: {st.session_state.report_date}', 0, 1, 'C')
+    pdf.ln(20)
+
+    # --- Input Parameters ---
+    pdf.add_page()
+    pdf.chapter_title('1. Input Parameters (SI Units)')
+    pdf.chapter_body(f"Pipe Inside Diameter (D): {inputs['D_input']:.4f} m")
+    pdf.chapter_body(f"Liquid Density (ρl): {inputs['rho_l_input']:.2f} kg/m³")
+    pdf.chapter_body(f"Liquid Viscosity (μl): {inputs['mu_l_input']:.8f} Pa·s")
+    pdf.chapter_body(f"Gas Velocity (Vg): {inputs['V_g_input']:.2f} m/s")
+    pdf.chapter_body(f"Gas Density (ρg): {inputs['rho_g_input']:.5f} kg/m³")
+    pdf.chapter_body(f"Gas Viscosity (μg): {inputs['mu_g_input']:.9f} Pa·s")
+    
+    sigma_display_val = from_fps(inputs['sigma_fps'], "surface_tension")
+    pdf.chapter_body(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
+    pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
+    pdf.ln(5)
+
+    # --- Calculation Steps ---
+    pdf.add_page()
+    pdf.chapter_title('2. Step-by-Step Calculation Results')
+    
+    # Define unit labels for SI system for report
+    len_unit = "m"
+    dens_unit = "kg/m³"
+    vel_unit = "m/s"
+    visc_unit = "Pa·s"
+    momentum_unit = "Pa"
+    micron_unit_label = "µm"
+
+    pdf.set_font('Arial', 'B', 10)
+    pdf.chapter_body("Inputs Used for Calculation (Converted to FPS for internal calculation):")
+    pdf.set_font('Arial', '', 10)
+    pdf.chapter_body(f"  Pipe Inside Diameter (D): {to_fps(inputs['D_input'], 'length'):.2f} ft")
+    pdf.chapter_body(f"  Liquid Density (ρl): {to_fps(inputs['rho_l_input'], 'density'):.2f} lb/ft³")
+    pdf.chapter_body(f"  Liquid Viscosity (μl): {to_fps(inputs['mu_l_input'], 'viscosity'):.7f} lb/ft-sec")
+    pdf.chapter_body(f"  Gas Velocity (Vg): {to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec")
+    pdf.chapter_body(f"  Gas Density (ρg): {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft³")
+    pdf.chapter_body(f"  Gas Viscosity (μg): {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec")
+    pdf.chapter_body(f"  Liquid Surface Tension (σ): {inputs['sigma_fps']:.4f} poundal/ft")
+    pdf.chapter_body(f"  Selected Inlet Device: {inputs['inlet_device']}")
+    pdf.ln(5)
+
+    # Step 1
+    pdf.set_font('Arial', 'B', 10)
+    pdf.chapter_body("Step 1: Calculate Superficial Gas Reynolds Number (Re_g)")
+    pdf.set_font('Arial', '', 10)
+    pdf.chapter_body(f"Equation: Re_g = (D * V_g * ρ_g) / μ_g")
+    pdf.chapter_body(f"Calculation (FPS): Re_g = ({to_fps(inputs['D_input'], 'length'):.2f} ft * {to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec * {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft³) / {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec = {results['Re_g']:.2f}")
+    pdf.chapter_body(f"Result: Superficial Gas Reynolds Number (Re_g) = {results['Re_g']:.2f} (dimensionless)")
+    pdf.ln(5)
+
+    # Step 2
+    pdf.set_font('Arial', 'B', 10)
+    pdf.chapter_body("Step 2: Calculate Initial Volume Median Diameter (d_v50) (Kataoka et al., 1983)")
+    pdf.set_font('Arial', '', 10)
+    pdf.chapter_body(f"Equation: d_v50 = 0.01 * (σ / (ρ_g V_g^2)) * Re_g^(2/3) * (ρ_g / ρ_l)^(-1/3) * (μ_g / μ_l)^(2/3)")
+    pdf.chapter_body(f"Calculation (FPS): d_v50 = 0.01 * ({inputs['sigma_fps']:.4f} / ({to_fps(inputs['rho_g_input'], 'density'):.4f} * {to_fps(inputs['V_g_input'], 'velocity'):.2f}^2)) * ({results['Re_g']:.2f})^(2/3) * ({to_fps(inputs['rho_g_input'], 'density'):.4f} / {to_fps(inputs['rho_l_input'], 'density'):.2f})^(-1/3) * ({to_fps(inputs['mu_g_input'], 'viscosity'):.8f} / {to_fps(inputs['mu_l_input'], 'viscosity'):.7f})^(2/3) = {results['dv50_original_fps']:.6f} ft")
+    pdf.chapter_body(f"Result: Initial Volume Median Diameter (d_v50) = {results['dv50_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label} ({from_fps(results['dv50_original_fps'], 'length'):.6f} {len_unit})")
+    pdf.ln(5)
+
+    # Step 3
+    pdf.set_font('Arial', 'B', 10)
+    pdf.chapter_body("Step 3: Calculate Inlet Momentum (ρ_g V_g^2)")
+    pdf.set_font('Arial', '', 10)
+    pdf.chapter_body(f"Equation: ρ_g V_g^2 = ρ_g * V_g^2")
+    pdf.chapter_body(f"Calculation (FPS): ρ_g V_g^2 = {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft³ * ({to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec)^2 = {results['rho_v_squared_fps']:.2f} lb/ft-sec²")
+    pdf.chapter_body(f"Result: Inlet Momentum (ρ_g V_g^2) = {from_fps(results['rho_v_squared_fps'], 'momentum'):.2f} {momentum_unit}")
+    pdf.ln(5)
+
+    # Step 4
+    pdf.set_font('Arial', 'B', 10)
+    pdf.chapter_body("Step 4: Apply Inlet Device 'Droplet Size Distribution Shift Factor'")
+    pdf.set_font('Arial', '', 10)
+    pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
+    pdf.chapter_body(f"Estimated Shift Factor (from Fig. 9): {results['shift_factor']:.3f}")
+    pdf.chapter_body(f"Equation: d_v50,adjusted = d_v50,original * Shift Factor")
+    pdf.chapter_body(f"Calculation (FPS): d_v50,adjusted = {results['dv50_original_fps']:.6f} ft * {results['shift_factor']:.3f} = {results['dv50_adjusted_fps']:.6f} ft")
+    pdf.chapter_body(f"Result: Adjusted Volume Median Diameter (d_v50) = {results['dv50_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label} ({from_fps(results['dv50_adjusted_fps'], 'length'):.6f} {len_unit})")
+    pdf.ln(5)
+
+    # Step 5
+    pdf.set_font('Arial', 'B', 10)
+    pdf.chapter_body("Step 5: Calculate Parameters for Upper-Limit Log Normal Distribution")
+    pdf.set_font('Arial', '', 10)
+    pdf.chapter_body(f"Using typical values from the article: a = {A_DISTRIBUTION} and δ = {DELTA_DISTRIBUTION}.")
+    pdf.chapter_body(f"Equation: d_max = a * d_v50,adjusted")
+    pdf.chapter_body(f"Calculation (FPS): d_max = {A_DISTRIBUTION} * {results['dv50_adjusted_fps']:.6f} ft = {results['d_max_fps']:.6f} ft")
+    pdf.chapter_body(f"Result: Maximum Droplet Size (d_max) = {results['d_max_fps'] * FT_TO_MICRON:.2f} {micron_unit_label} ({from_fps(results['d_max_fps'], 'length'):.6f} {len_unit})")
+    pdf.ln(5)
+
+    # --- Droplet Distribution Plot ---
+    pdf.add_page()
+    pdf.chapter_title('3. Droplet Distribution Results')
+    pdf.chapter_body("The following graph shows the calculated entrainment droplet size distribution:")
+    
+    # Add the plot image
+    if plot_image_buffer:
+        pdf.image(plot_image_buffer, x=10, y=pdf.get_y(), w=pdf.w - 20)
+    pdf.ln(5)
+
+    return pdf.output(dest='S').encode('latin1') # Return PDF as bytes
+
 # --- Streamlit App Layout ---
 
 st.set_page_config(layout="centered", page_title="Oil & Gas Separation App")
@@ -161,6 +297,8 @@ if 'calculation_results' not in st.session_state:
     st.session_state.calculation_results = None
 if 'plot_data' not in st.session_state:
     st.session_state.plot_data = None
+if 'report_date' not in st.session_state:
+    st.session_state.report_date = ""
 
 # Sidebar for navigation
 st.sidebar.header("Navigation")
@@ -241,6 +379,9 @@ if page == "Input Parameters":
     st.markdown("---")
 
     if st.button("Calculate Particle Size Distribution", help="Click to perform calculations and view results."):
+        import datetime
+        st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         try:
             # Convert all SI inputs to FPS for consistent calculation
             D = to_fps(st.session_state.inputs['D_input'], "length")
@@ -292,11 +433,27 @@ if page == "Input Parameters":
             cumulative_volume_undersize = []
 
             for dp in dp_values_ft:
-                z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
-                #fv_dp = (DELTA_DISTRIBUTION * d_max_fps) / np.sqrt(np.pi * dp * (d_max_fps - dp)) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2) #By Gemini
-                fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi) * dp * (d_max_fps - dp))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2) #Corrected
+                # Ensure dp is not equal to d_max_fps to avoid division by zero in log argument
+                if dp >= d_max_fps:
+                    z_val = np.inf # Or handle as per distribution definition for upper limit
+                else:
+                    z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
+                
+                # Handle potential division by zero for fv_dp if dp or (d_max_fps - dp) is zero
+                if dp == 0 or (d_max_fps - dp) == 0:
+                    fv_dp = 0
+                else:
+                    fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi * dp * (d_max_fps - dp)))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
+                
                 volume_fraction.append(fv_dp)
-                v_under = 1 - 0.5 * (1 - erf(DELTA_DISTRIBUTION * z_val))
+                
+                # For cumulative, erf(inf) is 1, erf(-inf) is -1
+                if z_val == np.inf:
+                    v_under = 1.0
+                elif z_val == -np.inf:
+                    v_under = 0.0
+                else:
+                    v_under = 1 - 0.5 * (1 - erf(DELTA_DISTRIBUTION * z_val))
                 cumulative_volume_undersize.append(v_under)
             
             plot_data['dp_values_ft'] = dp_values_ft
@@ -446,6 +603,17 @@ elif page == "Droplet Distribution Results":
         plt.grid(True, linestyle='--', alpha=0.7)
         st.pyplot(fig)
 
+        # Save plot to a BytesIO object for PDF embedding
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=300)
+        buf.seek(0) # Rewind to the beginning of the buffer
+
+        st.download_button(
+            label="Download Report as PDF",
+            data=generate_pdf_report(st.session_state.inputs, st.session_state.calculation_results, buf),
+            file_name="Droplet_Distribution_Report.pdf",
+            mime="application/pdf"
+        )
     else:
         st.warning("Please go to the 'Input Parameters' page and click 'Calculate Particle Size Distribution' first to generate the plot data.")
 
