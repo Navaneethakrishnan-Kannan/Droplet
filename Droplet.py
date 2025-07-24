@@ -278,6 +278,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.ln(5)
 
     # --- Volume Fraction Data Table ---
+    pdf.add_page() # Start a new page for the table
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
     if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
         headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize"]
