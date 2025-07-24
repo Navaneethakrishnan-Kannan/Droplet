@@ -87,21 +87,26 @@ def convert_value(value, unit_type, from_system, to_system):
 
 def on_unit_system_change():
     """Callback function to handle unit system changes and convert input values."""
-    current_system = st.session_state.unit_system # This is the NEW system
-    previous_system = st.session_state.previous_unit_system # This is the OLD system
+    # The new value of the radio button is available via its key in session_state
+    new_system = st.session_state.unit_selection_radio
+    # The previous system is stored in st.session_state.unit_system before this callback updates it
+    previous_system = st.session_state.unit_system
 
-    if current_system != previous_system:
-        # Convert all stored inputs from previous_system to current_system
+    if new_system != previous_system:
+        # Update the main unit_system state first
+        st.session_state.unit_system = new_system
+
+        # Convert all stored inputs from previous_system to new_system
         input_keys = ['D_input', 'rho_l_input', 'mu_l_input', 'V_g_input', 'rho_g_input', 'mu_g_input']
         unit_types = ['length', 'density', 'viscosity', 'velocity', 'density', 'viscosity']
 
         for key, unit_type in zip(input_keys, unit_types):
             if key in st.session_state.inputs:
-                st.session_state.inputs[key] = convert_value(st.session_state.inputs[key], unit_type, previous_system, current_system)
+                st.session_state.inputs[key] = convert_value(st.session_state.inputs[key], unit_type, previous_system, new_system)
         
         # Handle custom surface tension conversion
         if st.session_state.inputs['surface_tension_option'] == "Custom" and 'sigma_custom' in st.session_state.inputs:
-            st.session_state.inputs['sigma_custom'] = convert_value(st.session_state.inputs['sigma_custom'], "surface_tension", previous_system, current_system)
+            st.session_state.inputs['sigma_custom'] = convert_value(st.session_state.inputs['sigma_custom'], "surface_tension", previous_system, new_system)
         
         # Re-calculate sigma_fps based on the new unit system and potentially converted custom value
         sigma_input_val_after_conversion = 0.0
@@ -109,16 +114,16 @@ def on_unit_system_change():
             sigma_input_val_after_conversion = st.session_state.inputs['sigma_custom']
         else:
             sigma_input_val_after_conversion = SURFACE_TENSION_TABLE[st.session_state.inputs['surface_tension_option']]
-            if current_system == "SI":
+            if new_system == "SI": # Use new_system here for conversion logic
                 sigma_input_val_after_conversion *= 0.001 # Convert dyne/cm to N/m for SI display
 
-        if current_system == "FPS":
+        if new_system == "FPS": # Use new_system here for conversion logic
             st.session_state.inputs['sigma_fps'] = sigma_input_val_after_conversion * DYNE_CM_TO_POUNDAL_FT
         else: # SI
             st.session_state.inputs['sigma_fps'] = sigma_input_val_after_conversion * NM_TO_POUNDAL_FT
 
     # Update previous_unit_system for the next change
-    st.session_state.previous_unit_system = current_system
+    st.session_state.previous_unit_system = new_system
 
 # --- Streamlit App Layout ---
 
@@ -149,6 +154,7 @@ if 'inputs' not in st.session_state:
     # Initialize sigma_fps based on the initial default surface tension option
     st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
 
+# Initialize previous_unit_system to match current unit_system on first run
 if 'previous_unit_system' not in st.session_state:
     st.session_state.previous_unit_system = st.session_state.unit_system
 
@@ -166,10 +172,12 @@ if page == "Input Parameters":
     st.header("1. Input Parameters")
 
     # The radio button for unit system
-    st.session_state.unit_system = st.radio(
+    # Use the value from session_state to ensure it holds its position
+    st.radio(
         "Select Unit System",
         ["FPS", "SI"],
         key='unit_selection_radio',
+        value=st.session_state.unit_system, # Explicitly set value from session state
         on_change=on_unit_system_change, # This callback handles the conversion
         help="Choose between Foot-Pound-Second (FPS) or International System (SI) units."
     )
@@ -191,6 +199,7 @@ if page == "Input Parameters":
     st.subheader(f"Feed Pipe Conditions ({st.session_state.unit_system} Units)")
     col1, col2 = st.columns(2)
     with col1:
+        # Use value from session_state.inputs for all number_input widgets
         st.session_state.inputs['D_input'] = st.number_input(f"Pipe Inside Diameter ({len_unit})", min_value=0.01, value=st.session_state.inputs['D_input'], format="%.2f", key='D_input_widget',
                             help="Diameter of the feed pipe to the separator.")
         st.session_state.inputs['rho_l_input'] = st.number_input(f"Liquid Density ({dens_unit})", min_value=0.01, value=st.session_state.inputs['rho_l_input'], format="%.2f", key='rho_l_input_widget',
@@ -222,6 +231,7 @@ if page == "Input Parameters":
 
         sigma_input_val = 0.0
         if st.session_state.inputs['surface_tension_option'] == "Custom":
+            # Use value from session_state.inputs for custom sigma
             st.session_state.inputs['sigma_custom'] = st.number_input(f"Custom Liquid Surface Tension ({surf_tens_input_unit})", min_value=0.01, value=st.session_state.inputs['sigma_custom'], format="%.2f", key='sigma_custom_input')
             sigma_input_val = st.session_state.inputs['sigma_custom']
         else:
@@ -378,7 +388,7 @@ elif page == "Calculation Steps":
         rho_l_fps = convert_value(st.session_state.inputs['rho_l_input'], "density", unit_system, "FPS")
         mu_l_fps = convert_value(st.session_state.inputs['mu_l_input'], "viscosity", unit_system, "FPS")
 
-        dv50_original_display = from_fps(results['dv50_original_fps'], "length", unit_system)
+        dv50_original_display = convert_value(results['dv50_original_fps'], "length", "FPS", unit_system)
         
         st.write(f"Equation: $d_{{v50}} = 0.01 \\left(\\frac{{\\sigma}}{{\\rho_g V_g^2}}\\right) Re_g^2 \\left(\\frac{{\\rho_g}}{{\\rho_l}}\\right)^{{-1/3}} \\left(\\frac{{\\mu_g}}{{\\mu_l}}\\right)^{{2/3}}$")
         st.write(f"Calculation: $d_{{v50}} = 0.01 \\left(\\frac{{{st.session_state.inputs['sigma_fps']:.4f}}}{{{rho_g_fps:.4f} \\cdot ({V_g_fps:.2f})^2}}\\right) ({results['Re_g']:.2f})^2 \\left(\\frac{{{rho_g_fps:.4f}}}{{{rho_l_fps:.2f}}}\\right)^{{-0.333}} \\left(\\frac{{{mu_g_fps:.8f}}}{{{mu_l_fps:.7f}}}\\right)^{{0.667}}$")
@@ -388,7 +398,7 @@ elif page == "Calculation Steps":
 
         # Step 3: Determine Inlet Momentum (rho_g V_g^2)
         st.markdown("#### Step 3: Calculate Inlet Momentum ($\\rho_g V_g^2$)")
-        rho_v_squared_display = from_fps(results['rho_v_squared_fps'], "momentum", unit_system)
+        rho_v_squared_display = convert_value(results['rho_v_squared_fps'], "momentum", "FPS", unit_system)
         st.write(f"Equation: $\\rho_g V_g^2 = \\rho_g \\cdot V_g^2$")
         st.write(f"Calculation: $\\rho_g V_g^2 = {rho_g_fps:.4f} \\text{{ lb/ft}}^3 \\cdot ({V_g_fps:.2f} \\text{{ ft/sec}})^2 = {results['rho_v_squared_fps']:.2f} \\text{{ lb/ft-sec}}^2$")
         st.success(f"**Result:** Inlet Momentum ($\\rho_g V_g^2$) = **{rho_v_squared_display:.2f} {momentum_unit}**")
@@ -398,7 +408,7 @@ elif page == "Calculation Steps":
         # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
         st.markdown("#### Step 4: Apply Inlet Device Effect (Droplet Size Distribution Shift Factor)")
         st.write(f"Selected Inlet Device: **{st.session_state.inputs['inlet_device']}**")
-        dv50_adjusted_display = from_fps(results['dv50_adjusted_fps'], "length", unit_system)
+        dv50_adjusted_display = convert_value(results['dv50_adjusted_fps'], "length", "FPS", unit_system)
         st.write(f"Based on Figure 9 from the article, for an inlet momentum of {rho_v_squared_display:.2f} {momentum_unit} and a '{st.session_state.inputs['inlet_device']}' device, the estimated shift factor is **{results['shift_factor']:.3f}**.")
         st.write(f"Equation: $d_{{v50, adjusted}} = d_{{v50, original}} \\cdot \\text{{Shift Factor}}$")
         st.write(f"Calculation: $d_{{v50, adjusted}} = {results['dv50_original_fps']:.6f} \\text{{ ft}} \\cdot {results['shift_factor']:.3f} = {results['dv50_adjusted_fps']:.6f} \\text{{ ft}}$")
@@ -408,7 +418,7 @@ elif page == "Calculation Steps":
 
         # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
         st.markdown("#### Step 5: Calculate Parameters for Upper-Limit Log Normal Distribution")
-        d_max_display = from_fps(results['d_max_fps'], "length", unit_system)
+        d_max_display = convert_value(results['d_max_fps'], "length", "FPS", unit_system)
         st.write(f"Using typical values from the article: $a = {A_DISTRIBUTION}$ and $\\delta = {DELTA_DISTRIBUTION}$.")
         st.write(f"Equation: $d_{{max}} = a \\cdot d_{{v50, adjusted}}$")
         st.write(f"Calculation: $d_{{max}} = {A_DISTRIBUTION} \\cdot {results['dv50_adjusted_fps']:.6f} \\text{{ ft}} = {results['d_max_fps']:.6f} \\text{{ ft}}$")
