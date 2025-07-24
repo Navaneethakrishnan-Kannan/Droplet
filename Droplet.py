@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 # --- Constants and Look-up Data (derived from the article) ---
 
 # Table 1: Typical Liquid Surface Tension Values (dyne/cm)
-SURFACE_TENSION_TABLE = {
+# These will be converted to N/m for SI input/display
+SURFACE_TENSION_TABLE_DYNE_CM = {
     "Water/gas": 72,
     "Light crude oil/gas": 32,
     "Heavy crude oil/gas": 37,
@@ -18,6 +19,8 @@ SURFACE_TENSION_TABLE = {
 }
 # Conversion: 1 dyne/cm = 0.0022 poundal/ft (from the article)
 DYNE_CM_TO_POUNDAL_FT = 0.0022
+# Conversion: 1 dyne/cm = 0.001 N/m
+DYNE_CM_TO_NM = 0.001
 
 # Typical values for Upper-Limit Log Normal Distribution (from the article)
 A_DISTRIBUTION = 4.0
@@ -53,7 +56,7 @@ def get_shift_factor(inlet_device, rho_v_squared):
         else: return 0.2
     return 1.0
 
-# --- Unit Conversion Factors ---
+# --- Unit Conversion Factors (for internal FPS calculation) ---
 M_TO_FT = 3.28084 # 1 meter = 3.28084 feet
 KG_TO_LB = 2.20462 # 1 kg = 2.20462 lb
 MPS_TO_FTPS = 3.28084 # 1 m/s = 3.28084 ft/s
@@ -64,67 +67,35 @@ NM_TO_POUNDAL_FT = 2.2 # 1 N/m = 1000 dyne/cm; 1 dyne/cm = 0.0022 poundal/ft => 
 MICRON_TO_FT = 1e-6 * M_TO_FT
 FT_TO_MICRON = 1 / MICRON_TO_FT
 
-def convert_value(value, unit_type, from_system, to_system):
-    """Converts a value between FPS and SI units for a given unit type."""
-    if from_system == to_system:
-        return value
-
-    if from_system == "FPS" and to_system == "SI":
-        if unit_type == "length": return value / M_TO_FT
-        elif unit_type == "velocity": return value / MPS_TO_FTPS
-        elif unit_type == "density": return value / KG_M3_TO_LB_FT3
-        elif unit_type == "viscosity": return value / PAS_TO_LB_FT_S
-        elif unit_type == "surface_tension": return value / NM_TO_POUNDAL_FT # poundal/ft to N/m
-        elif unit_type == "momentum": return value / 1.48816 # lb/ft-s^2 to Pa
-    elif from_system == "SI" and to_system == "FPS":
-        if unit_type == "length": return value * M_TO_FT
-        elif unit_type == "velocity": return value * MPS_TO_FTPS
-        elif unit_type == "density": return value * KG_M3_TO_LB_FT3
-        elif unit_type == "viscosity": return value * PAS_TO_LB_FT_S
-        elif unit_type == "surface_tension": return value * NM_TO_POUNDAL_FT # N/m to poundal/ft
-        elif unit_type == "momentum": return value * 1.48816 # Pa to lb/ft-s^2
+def to_fps(value, unit_type):
+    """Converts a value from SI to FPS units for internal calculation."""
+    if unit_type == "length": # meters to feet
+        return value * M_TO_FT
+    elif unit_type == "velocity": # m/s to ft/s
+        return value * MPS_TO_FTPS
+    elif unit_type == "density": # kg/m^3 to lb/ft^3
+        return value * KG_M3_TO_LB_FT3
+    elif unit_type == "viscosity": # Pa.s to lb/ft.s
+        return value * PAS_TO_LB_FT_S
+    elif unit_type == "surface_tension": # N/m to poundal/ft
+        return value * NM_TO_POUNDAL_FT
     return value
 
-def on_unit_system_change():
-    """Callback function to handle unit system changes and convert input values."""
-    # The new value of the radio button is available via its key in session_state
-    new_selected_system = st.session_state.unit_selection_radio
-    # The unit system that was active *before* this change
-    # This is stored in st.session_state.active_unit_system_before_change
-    previous_system = st.session_state.active_unit_system_before_change
-
-    if new_selected_system != previous_system:
-        # Update the main unit_system state that controls display
-        st.session_state.unit_system = new_selected_system
-
-        # Convert all stored inputs from previous_system to new_selected_system
-        input_keys = ['D_input', 'rho_l_input', 'mu_l_input', 'V_g_input', 'rho_g_input', 'mu_g_input']
-        unit_types = ['length', 'density', 'viscosity', 'velocity', 'density', 'viscosity']
-
-        for key, unit_type in zip(input_keys, unit_types):
-            if key in st.session_state.inputs:
-                st.session_state.inputs[key] = convert_value(st.session_state.inputs[key], unit_type, previous_system, new_selected_system)
-        
-        # Handle custom surface tension conversion
-        if st.session_state.inputs['surface_tension_option'] == "Custom" and 'sigma_custom' in st.session_state.inputs:
-            st.session_state.inputs['sigma_custom'] = convert_value(st.session_state.inputs['sigma_custom'], "surface_tension", previous_system, new_selected_system)
-        
-        # Re-calculate sigma_fps based on the new unit system and potentially converted custom value
-        sigma_input_val_after_conversion = 0.0
-        if st.session_state.inputs['surface_tension_option'] == "Custom":
-            sigma_input_val_after_conversion = st.session_state.inputs['sigma_custom']
-        else:
-            sigma_input_val_after_conversion = SURFACE_TENSION_TABLE[st.session_state.inputs['surface_tension_option']]
-            if new_selected_system == "SI": # Use new_selected_system here for conversion logic
-                sigma_input_val_after_conversion *= 0.001 # Convert dyne/cm to N/m for SI display
-
-        if new_selected_system == "FPS": # Use new_selected_system here for conversion logic
-            st.session_state.inputs['sigma_fps'] = sigma_input_val_after_conversion * DYNE_CM_TO_POUNDAL_FT
-        else: # SI
-            st.session_state.inputs['sigma_fps'] = sigma_input_val_after_conversion * NM_TO_POUNDAL_FT
-
-    # Update active_unit_system_before_change for the next change
-    st.session_state.active_unit_system_before_change = new_selected_system
+def from_fps(value, unit_type):
+    """Converts a value from FPS to SI units for display."""
+    if unit_type == "length": # feet to meters
+        return value / M_TO_FT
+    elif unit_type == "velocity": # ft/s to m/s
+        return value / MPS_TO_FTPS
+    elif unit_type == "density": # lb/ft^3 to kg/m^3
+        return value / KG_M3_TO_LB_FT3
+    elif unit_type == "viscosity": # lb/ft.s to Pa.s
+        return value / PAS_TO_LB_FT_S
+    elif unit_type == "surface_tension": # poundal/ft to N/m
+        return value / NM_TO_POUNDAL_FT
+    elif unit_type == "momentum": # lb/ft-s^2 to Pa
+        return value * 1.48816 # 1 lb/ft-s^2 = 1.48816 Pa
+    return value
 
 # --- Streamlit App Layout ---
 
@@ -134,30 +105,25 @@ st.title("🛢️ Oil and Gas Separation: Particle Size Distribution")
 st.markdown("""
 This application helps quantify the entrained liquid droplet size distribution in gas-liquid separators,
 based on the principles and correlations discussed in the article "Quantifying Separation Performance" by Mark Bothamley.
+All inputs and outputs are in **SI Units**.
 """)
 
 # Initialize session state for inputs and results if not already present
-if 'unit_system' not in st.session_state:
-    st.session_state.unit_system = "FPS"
 if 'inputs' not in st.session_state:
-    # Initialize inputs with default FPS values
+    # Initialize inputs with default SI values
     st.session_state.inputs = {
-        'D_input': 1.0, # ft
-        'rho_l_input': 40.0, # lb/ft3
-        'mu_l_input': 0.0005, # lb/ft-sec
-        'V_g_input': 50.0, # ft/sec
-        'rho_g_input': 0.1, # lb/ft3
-        'mu_g_input': 0.00001, # lb/ft-sec
+        'D_input': 0.3048, # m (1 ft)
+        'rho_l_input': 640.7, # kg/m3 (40 lb/ft3)
+        'mu_l_input': 0.000743, # Pa.s (0.0005 lb/ft-sec)
+        'V_g_input': 15.24, # m/s (50 ft/sec)
+        'rho_g_input': 1.6018, # kg/m3 (0.1 lb/ft3)
+        'mu_g_input': 0.00001488, # Pa.s (0.00001 lb/ft-sec)
         'surface_tension_option': "Water/gas",
-        'sigma_custom': 30.0, # dyne/cm (FPS default for custom)
+        'sigma_custom': 0.03, # N/m (30 dyne/cm)
         'inlet_device': "No inlet device",
     }
     # Initialize sigma_fps based on the initial default surface tension option
-    st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
-
-# Initialize active_unit_system_before_change to match current unit_system on first run
-if 'active_unit_system_before_change' not in st.session_state:
-    st.session_state.active_unit_system_before_change = st.session_state.unit_system
+    st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE_DYNE_CM["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
 
 if 'calculation_results' not in st.session_state:
     st.session_state.calculation_results = None
@@ -170,88 +136,67 @@ page = st.sidebar.radio("Go to", ["Input Parameters", "Calculation Steps", "Drop
 
 # --- Page: Input Parameters ---
 if page == "Input Parameters":
-    st.header("1. Input Parameters")
+    st.header("1. Input Parameters (SI Units)")
 
-    # The radio button for unit system
-    # Use the value from session_state to ensure it holds its position
-    st.radio(
-        "Select Unit System",
-        ["FPS", "SI"],
-        key='unit_selection_radio',
-        value=st.session_state.unit_system, # Explicitly set value from session state
-        on_change=on_unit_system_change, # This callback handles the conversion
-        help="Choose between Foot-Pound-Second (FPS) or International System (SI) units."
-    )
+    # Define unit labels for SI system
+    len_unit = "m"
+    dens_unit = "kg/m³"
+    vel_unit = "m/s"
+    visc_unit = "Pa·s"
+    surf_tens_input_unit = "N/m"
 
-    # Define unit labels based on current session state unit system
-    if st.session_state.unit_system == "FPS":
-        len_unit = "ft"
-        dens_unit = "lb/ft³"
-        vel_unit = "ft/sec"
-        visc_unit = "lb/ft-sec"
-        surf_tens_input_unit = "dyne/cm"
-    else: # SI
-        len_unit = "m"
-        dens_unit = "kg/m³"
-        vel_unit = "m/s"
-        visc_unit = "Pa·s"
-        surf_tens_input_unit = "N/m"
-
-    st.subheader(f"Feed Pipe Conditions ({st.session_state.unit_system} Units)")
+    st.subheader("Feed Pipe Conditions")
     col1, col2 = st.columns(2)
     with col1:
-        # Use value from session_state.inputs for all number_input widgets
-        st.session_state.inputs['D_input'] = st.number_input(f"Pipe Inside Diameter ({len_unit})", min_value=0.01, value=st.session_state.inputs['D_input'], format="%.2f", key='D_input_widget',
+        st.session_state.inputs['D_input'] = st.number_input(f"Pipe Inside Diameter ({len_unit})", min_value=0.001, value=st.session_state.inputs['D_input'], format="%.4f", key='D_input_widget',
                             help="Diameter of the feed pipe to the separator.")
-        st.session_state.inputs['rho_l_input'] = st.number_input(f"Liquid Density ({dens_unit})", min_value=0.01, value=st.session_state.inputs['rho_l_input'], format="%.2f", key='rho_l_input_widget',
+        st.session_state.inputs['rho_l_input'] = st.number_input(f"Liquid Density ({dens_unit})", min_value=0.1, value=st.session_state.inputs['rho_l_input'], format="%.2f", key='rho_l_input_widget',
                                 help="Density of the liquid phase.")
-        st.session_state.inputs['mu_l_input'] = st.number_input(f"Liquid Viscosity ({visc_unit})", min_value=1e-7, value=st.session_state.inputs['mu_l_input'], format="%.7f", key='mu_l_input_widget',
-                                help=f"Viscosity of the liquid phase. Example: Water at 60°F is ~0.00075 {visc_unit} (FPS) or ~0.0011 {visc_unit} (SI).")
+        st.session_state.inputs['mu_l_input'] = st.number_input(f"Liquid Viscosity ({visc_unit})", min_value=1e-8, value=st.session_state.inputs['mu_l_input'], format="%.8f", key='mu_l_input_widget',
+                                help=f"Viscosity of the liquid phase. Example: Water at 20°C is ~0.001 Pa·s.")
     with col2:
         st.session_state.inputs['V_g_input'] = st.number_input(f"Gas Velocity ({vel_unit})", min_value=0.01, value=st.session_state.inputs['V_g_input'], format="%.2f", key='V_g_input_widget',
                               help="Superficial gas velocity in the feed pipe.")
-        st.session_state.inputs['rho_g_input'] = st.number_input(f"Gas Density ({dens_unit})", min_value=1e-4, value=st.session_state.inputs['rho_g_input'], format="%.4f", key='rho_g_input_widget',
+        st.session_state.inputs['rho_g_input'] = st.number_input(f"Gas Density ({dens_unit})", min_value=1e-5, value=st.session_state.inputs['rho_g_input'], format="%.5f", key='rho_g_input_widget',
                                 help="Density of the gas phase.")
-        st.session_state.inputs['mu_g_input'] = st.number_input(f"Gas Viscosity ({visc_unit})", min_value=1e-8, value=st.session_state.inputs['mu_g_input'], format="%.8f", key='mu_g_input_widget',
-                                help=f"Viscosity of the gas phase. Example: Methane at 60°F is ~0.000007 {visc_unit} (FPS) or ~0.00001 {visc_unit} (SI).")
+        st.session_state.inputs['mu_g_input'] = st.number_input(f"Gas Viscosity ({visc_unit})", min_value=1e-9, value=st.session_state.inputs['mu_g_input'], format="%.9f", key='mu_g_input_widget',
+                                help=f"Viscosity of the gas phase. Example: Methane at 20°C is ~0.000011 Pa·s.")
 
     st.markdown("---")
     col_st, col_id = st.columns(2)
 
     with col_st:
         st.subheader("Liquid Surface Tension")
-        # Ensure the selectbox reflects the current state
-        current_st_option_index = list(SURFACE_TENSION_TABLE.keys()).index(st.session_state.inputs['surface_tension_option']) if st.session_state.inputs['surface_tension_option'] in SURFACE_TENSION_TABLE else len(SURFACE_TENSION_TABLE.keys())
+        # Convert SURFACE_TENSION_TABLE_DYNE_CM values to N/m for display in selectbox
+        st_options_nm = {k: v * DYNE_CM_TO_NM for k, v in SURFACE_TENSION_TABLE_DYNE_CM.items()}
+        
+        # Determine current index for selectbox
+        current_st_option_index = list(SURFACE_TENSION_TABLE_DYNE_CM.keys()).index(st.session_state.inputs['surface_tension_option']) if st.session_state.inputs['surface_tension_option'] in SURFACE_TENSION_TABLE_DYNE_CM else len(SURFACE_TENSION_TABLE_DYNE_CM.keys())
+        
         st.session_state.inputs['surface_tension_option'] = st.selectbox(
             "Select Fluid System for Surface Tension",
-            options=list(SURFACE_TENSION_TABLE.keys()) + ["Custom"],
+            options=list(SURFACE_TENSION_TABLE_DYNE_CM.keys()) + ["Custom"],
             index=current_st_option_index,
             key='surface_tension_option_select',
+            format_func=lambda x: f"{x} ({st_options_nm[x]:.3f} N/m)" if x in st_options_nm else x, # Show N/m in options
             help="Choose a typical value or enter a custom one."
         )
 
-        sigma_input_val = 0.0
+        sigma_input_val_si = 0.0
         if st.session_state.inputs['surface_tension_option'] == "Custom":
-            # Use value from session_state.inputs for custom sigma
-            st.session_state.inputs['sigma_custom'] = st.number_input(f"Custom Liquid Surface Tension ({surf_tens_input_unit})", min_value=0.01, value=st.session_state.inputs['sigma_custom'], format="%.2f", key='sigma_custom_input')
-            sigma_input_val = st.session_state.inputs['sigma_custom']
+            st.session_state.inputs['sigma_custom'] = st.number_input(f"Custom Liquid Surface Tension ({surf_tens_input_unit})", min_value=0.0001, value=st.session_state.inputs['sigma_custom'], format="%.4f", key='sigma_custom_input')
+            sigma_input_val_si = st.session_state.inputs['sigma_custom']
         else:
-            sigma_input_val = SURFACE_TENSION_TABLE[st.session_state.inputs['surface_tension_option']]
-            if st.session_state.unit_system == "SI":
-                sigma_input_val = sigma_input_val * 0.001 # 1 dyne/cm = 0.001 N/m
-
-        # This part ensures sigma_fps is always up-to-date based on the current inputs and unit system
-        if st.session_state.unit_system == "FPS":
-            st.session_state.inputs['sigma_fps'] = sigma_input_val * DYNE_CM_TO_POUNDAL_FT
-        else:
-            st.session_state.inputs['sigma_fps'] = sigma_input_val * NM_TO_POUNDAL_FT
+            sigma_input_val_si = SURFACE_TENSION_TABLE_DYNE_CM[st.session_state.inputs['surface_tension_option']] * DYNE_CM_TO_NM
         
-        st.info(f"**Calculated Liquid Surface Tension (for calculation):** {st.session_state.inputs['sigma_fps']:.4f} poundal/ft")
+        # Store sigma in FPS for internal calculation
+        st.session_state.inputs['sigma_fps'] = to_fps(sigma_input_val_si, "surface_tension")
+        
+        st.info(f"**Selected Liquid Surface Tension:** {sigma_input_val_si:.3f} {surf_tens_input_unit}")
 
 
     with col_id:
         st.subheader("Separator Inlet Device")
-        # Ensure the selectbox reflects the current state
         current_inlet_device_index = ["No inlet device", "Diverter plate", "Half-pipe", "Vane-type", "Cyclonic"].index(st.session_state.inputs['inlet_device'])
         st.session_state.inputs['inlet_device'] = st.selectbox(
             "Choose Inlet Device Type",
@@ -265,13 +210,13 @@ if page == "Input Parameters":
 
     if st.button("Calculate Particle Size Distribution", help="Click to perform calculations and view results."):
         try:
-            # Convert all inputs to FPS for consistent calculation
-            D = convert_value(st.session_state.inputs['D_input'], "length", st.session_state.unit_system, "FPS")
-            rho_l = convert_value(st.session_state.inputs['rho_l_input'], "density", st.session_state.unit_system, "FPS")
-            mu_l = convert_value(st.session_state.inputs['mu_l_input'], "viscosity", st.session_state.unit_system, "FPS")
-            V_g = convert_value(st.session_state.inputs['V_g_input'], "velocity", st.session_state.unit_system, "FPS")
-            rho_g = convert_value(st.session_state.inputs['rho_g_input'], "density", st.session_state.unit_system, "FPS")
-            mu_g = convert_value(st.session_state.inputs['mu_g_input'], "viscosity", st.session_state.unit_system, "FPS")
+            # Convert all SI inputs to FPS for consistent calculation
+            D = to_fps(st.session_state.inputs['D_input'], "length")
+            rho_l = to_fps(st.session_state.inputs['rho_l_input'], "density")
+            mu_l = to_fps(st.session_state.inputs['mu_l_input'], "viscosity")
+            V_g = to_fps(st.session_state.inputs['V_g_input'], "velocity")
+            rho_g = to_fps(st.session_state.inputs['rho_g_input'], "density")
+            mu_g = to_fps(st.session_state.inputs['mu_g_input'], "viscosity")
             sigma = st.session_state.inputs['sigma_fps'] # This is already in poundal/ft
 
             # --- Perform Calculations ---
@@ -341,67 +286,60 @@ elif page == "Calculation Steps":
 
     if st.session_state.calculation_results:
         results = st.session_state.calculation_results
-        unit_system = st.session_state.unit_system
+        
+        # Define unit labels for SI system
+        len_unit = "m"
+        dens_unit = "kg/m³"
+        vel_unit = "m/s"
+        visc_unit = "Pa·s"
+        momentum_unit = "Pa"
+        micron_unit_label = "µm"
 
-        # Define unit labels for display
-        if unit_system == "FPS":
-            len_unit = "ft"
-            dens_unit = "lb/ft³"
-            vel_unit = "ft/sec"
-            visc_unit = "lb/ft-sec"
-            momentum_unit = "lb/ft-sec²"
-            micron_unit_label = "microns"
-        else: # SI
-            len_unit = "m"
-            dens_unit = "kg/m³"
-            vel_unit = "m/s"
-            visc_unit = "Pa·s"
-            momentum_unit = "Pa"
-            micron_unit_label = "µm"
-
-        # Display inputs used for calculation (converted to FPS)
-        st.subheader("Inputs Used for Calculation (Converted to FPS)")
-        st.write(f"Pipe Inside Diameter (D): {convert_value(st.session_state.inputs['D_input'], 'length', unit_system, 'FPS'):.2f} ft")
-        st.write(f"Liquid Density (ρl): {convert_value(st.session_state.inputs['rho_l_input'], 'density', unit_system, 'FPS'):.2f} lb/ft³")
-        st.write(f"Liquid Viscosity (μl): {convert_value(st.session_state.inputs['mu_l_input'], 'viscosity', unit_system, 'FPS'):.7f} lb/ft-sec")
-        st.write(f"Gas Velocity (Vg): {convert_value(st.session_state.inputs['V_g_input'], 'velocity', unit_system, 'FPS'):.2f} ft/sec")
-        st.write(f"Gas Density (ρg): {convert_value(st.session_state.inputs['rho_g_input'], 'density', unit_system, 'FPS'):.4f} lb/ft³")
-        st.write(f"Gas Viscosity (μg): {convert_value(st.session_state.inputs['mu_g_input'], 'viscosity', unit_system, 'FPS'):.8f} lb/ft-sec")
-        st.write(f"Liquid Surface Tension (σ): {st.session_state.inputs['sigma_fps']:.4f} poundal/ft")
+        # Display inputs used for calculation (original SI values)
+        st.subheader("Inputs Used for Calculation (SI Units)")
+        st.write(f"Pipe Inside Diameter (D): {st.session_state.inputs['D_input']:.4f} {len_unit}")
+        st.write(f"Liquid Density (ρl): {st.session_state.inputs['rho_l_input']:.2f} {dens_unit}")
+        st.write(f"Liquid Viscosity (μl): {st.session_state.inputs['mu_l_input']:.8f} {visc_unit}")
+        st.write(f"Gas Velocity (Vg): {st.session_state.inputs['V_g_input']:.2f} {vel_unit}")
+        st.write(f"Gas Density (ρg): {st.session_state.inputs['rho_g_input']:.5f} {dens_unit}")
+        st.write(f"Gas Viscosity (μg): {st.session_state.inputs['mu_g_input']:.9f} {visc_unit}")
+        # Display selected surface tension in SI units
+        sigma_display_val = from_fps(st.session_state.inputs['sigma_fps'], "surface_tension")
+        st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
         st.write(f"Selected Inlet Device: {st.session_state.inputs['inlet_device']}")
         st.markdown("---")
 
         # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
         st.markdown("#### Step 1: Calculate Superficial Gas Reynolds Number ($Re_g$)")
-        D_fps = convert_value(st.session_state.inputs['D_input'], "length", unit_system, "FPS")
-        V_g_fps = convert_value(st.session_state.inputs['V_g_input'], "velocity", unit_system, "FPS")
-        rho_g_fps = convert_value(st.session_state.inputs['rho_g_input'], "density", unit_system, "FPS")
-        mu_g_fps = convert_value(st.session_state.inputs['mu_g_input'], "viscosity", unit_system, "FPS")
+        D_fps = to_fps(st.session_state.inputs['D_input'], "length")
+        V_g_fps = to_fps(st.session_state.inputs['V_g_input'], "velocity")
+        rho_g_fps = to_fps(st.session_state.inputs['rho_g_input'], "density")
+        mu_g_fps = to_fps(st.session_state.inputs['mu_g_input'], "viscosity")
 
         st.write(f"Equation: $Re_g = \\frac{{D \\cdot V_g \\cdot \\rho_g}}{{\\mu_g}}$")
-        st.write(f"Calculation: $Re_g = \\frac{{{D_fps:.2f} \\text{{ ft}} \\cdot {V_g_fps:.2f} \\text{{ ft/sec}} \\cdot {rho_g_fps:.4f} \\text{{ lb/ft}}^3}}{{{mu_g_fps:.8f} \\text{{ lb/ft-sec}}}} = {results['Re_g']:.2f}$")
+        st.write(f"Calculation (FPS): $Re_g = \\frac{{{D_fps:.2f} \\text{{ ft}} \\cdot {V_g_fps:.2f} \\text{{ ft/sec}} \\cdot {rho_g_fps:.4f} \\text{{ lb/ft}}^3}}{{{mu_g_fps:.8f} \\text{{ lb/ft-sec}}}} = {results['Re_g']:.2f}$")
         st.success(f"**Result:** Superficial Gas Reynolds Number ($Re_g$) = **{results['Re_g']:.2f}** (dimensionless)")
 
         st.markdown("---")
 
         # Step 2: Calculate Volume Median Diameter ($d_{v50}$) without inlet device effect
         st.markdown("#### Step 2: Calculate Initial Volume Median Diameter ($d_{v50}$) (Kataoka et al., 1983)")
-        rho_l_fps = convert_value(st.session_state.inputs['rho_l_input'], "density", unit_system, "FPS")
-        mu_l_fps = convert_value(st.session_state.inputs['mu_l_input'], "viscosity", unit_system, "FPS")
+        rho_l_fps = to_fps(st.session_state.inputs['rho_l_input'], "density")
+        mu_l_fps = to_fps(st.session_state.inputs['mu_l_input'], "viscosity")
 
-        dv50_original_display = convert_value(results['dv50_original_fps'], "length", "FPS", unit_system)
+        dv50_original_display = from_fps(results['dv50_original_fps'], "length")
         
         st.write(f"Equation: $d_{{v50}} = 0.01 \\left(\\frac{{\\sigma}}{{\\rho_g V_g^2}}\\right) Re_g^2 \\left(\\frac{{\\rho_g}}{{\\rho_l}}\\right)^{{-1/3}} \\left(\\frac{{\\mu_g}}{{\\mu_l}}\\right)^{{2/3}}$")
-        st.write(f"Calculation: $d_{{v50}} = 0.01 \\left(\\frac{{{st.session_state.inputs['sigma_fps']:.4f}}}{{{rho_g_fps:.4f} \\cdot ({V_g_fps:.2f})^2}}\\right) ({results['Re_g']:.2f})^2 \\left(\\frac{{{rho_g_fps:.4f}}}{{{rho_l_fps:.2f}}}\\right)^{{-0.333}} \\left(\\frac{{{mu_g_fps:.8f}}}{{{mu_l_fps:.7f}}}\\right)^{{0.667}}$")
+        st.write(f"Calculation (FPS): $d_{{v50}} = 0.01 \\left(\\frac{{{st.session_state.inputs['sigma_fps']:.4f}}}{{{rho_g_fps:.4f} \\cdot ({V_g_fps:.2f})^2}}\\right) ({results['Re_g']:.2f})^2 \\left(\\frac{{{rho_g_fps:.4f}}}{{{rho_l_fps:.2f}}}\\right)^{{-0.333}} \\left(\\frac{{{mu_g_fps:.8f}}}{{{mu_l_fps:.7f}}}\\right)^{{0.667}}$")
         st.success(f"**Result:** Initial Volume Median Diameter ($d_{{v50}}$) = **{results['dv50_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({dv50_original_display:.6f} {len_unit})")
 
         st.markdown("---")
 
         # Step 3: Determine Inlet Momentum (rho_g V_g^2)
         st.markdown("#### Step 3: Calculate Inlet Momentum ($\\rho_g V_g^2$)")
-        rho_v_squared_display = convert_value(results['rho_v_squared_fps'], "momentum", "FPS", unit_system)
+        rho_v_squared_display = from_fps(results['rho_v_squared_fps'], "momentum")
         st.write(f"Equation: $\\rho_g V_g^2 = \\rho_g \\cdot V_g^2$")
-        st.write(f"Calculation: $\\rho_g V_g^2 = {rho_g_fps:.4f} \\text{{ lb/ft}}^3 \\cdot ({V_g_fps:.2f} \\text{{ ft/sec}})^2 = {results['rho_v_squared_fps']:.2f} \\text{{ lb/ft-sec}}^2$")
+        st.write(f"Calculation (FPS): $\\rho_g V_g^2 = {rho_g_fps:.4f} \\text{{ lb/ft}}^3 \\cdot ({V_g_fps:.2f} \\text{{ ft/sec}})^2 = {results['rho_v_squared_fps']:.2f} \\text{{ lb/ft-sec}}^2$")
         st.success(f"**Result:** Inlet Momentum ($\\rho_g V_g^2$) = **{rho_v_squared_display:.2f} {momentum_unit}**")
 
         st.markdown("---")
@@ -409,20 +347,20 @@ elif page == "Calculation Steps":
         # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
         st.markdown("#### Step 4: Apply Inlet Device Effect (Droplet Size Distribution Shift Factor)")
         st.write(f"Selected Inlet Device: **{st.session_state.inputs['inlet_device']}**")
-        dv50_adjusted_display = convert_value(results['dv50_adjusted_fps'], "length", "FPS", unit_system)
+        dv50_adjusted_display = from_fps(results['dv50_adjusted_fps'], "length")
         st.write(f"Based on Figure 9 from the article, for an inlet momentum of {rho_v_squared_display:.2f} {momentum_unit} and a '{st.session_state.inputs['inlet_device']}' device, the estimated shift factor is **{results['shift_factor']:.3f}**.")
         st.write(f"Equation: $d_{{v50, adjusted}} = d_{{v50, original}} \\cdot \\text{{Shift Factor}}$")
-        st.write(f"Calculation: $d_{{v50, adjusted}} = {results['dv50_original_fps']:.6f} \\text{{ ft}} \\cdot {results['shift_factor']:.3f} = {results['dv50_adjusted_fps']:.6f} \\text{{ ft}}$")
+        st.write(f"Calculation (FPS): $d_{{v50, adjusted}} = {results['dv50_original_fps']:.6f} \\text{{ ft}} \\cdot {results['shift_factor']:.3f} = {results['dv50_adjusted_fps']:.6f} \\text{{ ft}}$")
         st.success(f"**Result:** Adjusted Volume Median Diameter ($d_{{v50}}$) = **{results['dv50_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({dv50_adjusted_display:.6f} {len_unit})")
 
         st.markdown("---")
 
         # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
         st.markdown("#### Step 5: Calculate Parameters for Upper-Limit Log Normal Distribution")
-        d_max_display = convert_value(results['d_max_fps'], "length", "FPS", unit_system)
+        d_max_display = from_fps(results['d_max_fps'], "length")
         st.write(f"Using typical values from the article: $a = {A_DISTRIBUTION}$ and $\\delta = {DELTA_DISTRIBUTION}$.")
         st.write(f"Equation: $d_{{max}} = a \\cdot d_{{v50, adjusted}}$")
-        st.write(f"Calculation: $d_{{max}} = {A_DISTRIBUTION} \\cdot {results['dv50_adjusted_fps']:.6f} \\text{{ ft}} = {results['d_max_fps']:.6f} \\text{{ ft}}$")
+        st.write(f"Calculation (FPS): $d_{{max}} = {A_DISTRIBUTION} \\cdot {results['dv50_adjusted_fps']:.6f} \\text{{ ft}} = {results['d_max_fps']:.6f} \\text{{ ft}}$")
         st.success(f"**Result:** Maximum Droplet Size ($d_{{max}}$) = **{results['d_max_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({d_max_display:.6f} {len_unit})")
 
         st.markdown("---")
@@ -438,10 +376,9 @@ elif page == "Droplet Distribution Results":
 
     if st.session_state.plot_data:
         plot_data = st.session_state.plot_data
-        unit_system = st.session_state.unit_system
-
+        
         # Define unit labels for plotting
-        micron_unit_label = "microns" if unit_system == "FPS" else "µm"
+        micron_unit_label = "µm" # Always SI for this version
 
         dp_values_microns = plot_data['dp_values_ft'] * FT_TO_MICRON
         volume_fraction = plot_data['volume_fraction']
@@ -482,5 +419,5 @@ st.markdown("""
 #### Important Notes:
 * **Figure 9 Approximation:** The "Droplet Size Distribution Shift Factor" is based on a simplified interpretation of Figure 9 from the article. For highly precise engineering applications, the curves in Figure 9 would need to be digitized and accurately modeled.
 * **Log Normal Distribution Parameters:** The article states typical values for $a=4.0$ and $\delta=0.72$. The formula for $\delta$ shown in the article ($\\delta=\\frac{0.394}{log(\\frac{V_{so}}{V_{so}})}$) appears to be a typographical error, so the constant value $\\delta=0.72$ is used as indicated in the text.
-* **Units:** The application now supports both Foot-Pound-Second (FPS) and International System (SI) units. All internal calculations are performed in FPS units to align with the article's correlations, with automatic conversions for inputs and outputs.
+* **Units:** This application now exclusively uses the International System (SI) units for all inputs and outputs. All internal calculations are still performed in FPS units to align with the article's correlations, with automatic conversions handled internally.
 """)
