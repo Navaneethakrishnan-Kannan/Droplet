@@ -88,25 +88,26 @@ def convert_value(value, unit_type, from_system, to_system):
 def on_unit_system_change():
     """Callback function to handle unit system changes and convert input values."""
     # The new value of the radio button is available via its key in session_state
-    new_system = st.session_state.unit_selection_radio
-    # The previous system is stored in st.session_state.unit_system_for_conversion_tracking
-    previous_system = st.session_state.unit_system_for_conversion_tracking
+    new_selected_system = st.session_state.unit_selection_radio
+    # The unit system that was active *before* this change
+    # This is stored in st.session_state.active_unit_system_before_change
+    previous_system = st.session_state.active_unit_system_before_change
 
-    if new_system != previous_system:
+    if new_selected_system != previous_system:
         # Update the main unit_system state that controls display
-        st.session_state.unit_system = new_system
+        st.session_state.unit_system = new_selected_system
 
-        # Convert all stored inputs from previous_system to new_system
+        # Convert all stored inputs from previous_system to new_selected_system
         input_keys = ['D_input', 'rho_l_input', 'mu_l_input', 'V_g_input', 'rho_g_input', 'mu_g_input']
         unit_types = ['length', 'density', 'viscosity', 'velocity', 'density', 'viscosity']
 
         for key, unit_type in zip(input_keys, unit_types):
             if key in st.session_state.inputs:
-                st.session_state.inputs[key] = convert_value(st.session_state.inputs[key], unit_type, previous_system, new_system)
+                st.session_state.inputs[key] = convert_value(st.session_state.inputs[key], unit_type, previous_system, new_selected_system)
         
         # Handle custom surface tension conversion
         if st.session_state.inputs['surface_tension_option'] == "Custom" and 'sigma_custom' in st.session_state.inputs:
-            st.session_state.inputs['sigma_custom'] = convert_value(st.session_state.inputs['sigma_custom'], "surface_tension", previous_system, new_system)
+            st.session_state.inputs['sigma_custom'] = convert_value(st.session_state.inputs['sigma_custom'], "surface_tension", previous_system, new_selected_system)
         
         # Re-calculate sigma_fps based on the new unit system and potentially converted custom value
         sigma_input_val_after_conversion = 0.0
@@ -114,16 +115,16 @@ def on_unit_system_change():
             sigma_input_val_after_conversion = st.session_state.inputs['sigma_custom']
         else:
             sigma_input_val_after_conversion = SURFACE_TENSION_TABLE[st.session_state.inputs['surface_tension_option']]
-            if new_system == "SI": # Use new_system here for conversion logic
+            if new_selected_system == "SI": # Use new_selected_system here for conversion logic
                 sigma_input_val_after_conversion *= 0.001 # Convert dyne/cm to N/m for SI display
 
-        if new_system == "FPS": # Use new_system here for conversion logic
+        if new_selected_system == "FPS": # Use new_selected_system here for conversion logic
             st.session_state.inputs['sigma_fps'] = sigma_input_val_after_conversion * DYNE_CM_TO_POUNDAL_FT
         else: # SI
             st.session_state.inputs['sigma_fps'] = sigma_input_val_after_conversion * NM_TO_POUNDAL_FT
 
-    # Update unit_system_for_conversion_tracking for the next change
-    st.session_state.unit_system_for_conversion_tracking = new_system
+    # Update active_unit_system_before_change for the next change
+    st.session_state.active_unit_system_before_change = new_selected_system
 
 # --- Streamlit App Layout ---
 
@@ -154,9 +155,9 @@ if 'inputs' not in st.session_state:
     # Initialize sigma_fps based on the initial default surface tension option
     st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
 
-# Initialize unit_system_for_conversion_tracking to match current unit_system on first run
-if 'unit_system_for_conversion_tracking' not in st.session_state:
-    st.session_state.unit_system_for_conversion_tracking = st.session_state.unit_system
+# Initialize active_unit_system_before_change to match current unit_system on first run
+if 'active_unit_system_before_change' not in st.session_state:
+    st.session_state.active_unit_system_before_change = st.session_state.unit_system
 
 if 'calculation_results' not in st.session_state:
     st.session_state.calculation_results = None
