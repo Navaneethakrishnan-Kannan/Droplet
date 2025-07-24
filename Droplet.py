@@ -293,7 +293,8 @@ if page == "Input Parameters":
 
             for dp in dp_values_ft:
                 z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
-                fv_dp = (DELTA_DISTRIBUTION * d_max_fps) / np.sqrt(np.pi * dp * (d_max_fps - dp)) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
+                #fv_dp = (DELTA_DISTRIBUTION * d_max_fps) / np.sqrt(np.pi * dp * (d_max_fps - dp)) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2) #By Gemini
+                fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi) * dp * (d_max_fps - dp))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2) #Corrected
                 volume_fraction.append(fv_dp)
                 v_under = 1 - 0.5 * (1 - erf(DELTA_DISTRIBUTION * z_val))
                 cumulative_volume_undersize.append(v_under)
