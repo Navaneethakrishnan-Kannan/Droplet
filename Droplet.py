@@ -377,97 +377,96 @@ if page == "Input Parameters":
 
     st.markdown("---")
 
-    if st.button("Calculate Particle Size Distribution", help="Click to perform calculations and view results."):
-        import datetime
-        st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # The calculation block is now outside any button, so it runs on every input change
+    import datetime
+    st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        try:
-            # Convert all SI inputs to FPS for consistent calculation
-            D = to_fps(st.session_state.inputs['D_input'], "length")
-            rho_l = to_fps(st.session_state.inputs['rho_l_input'], "density")
-            mu_l = to_fps(st.session_state.inputs['mu_l_input'], "viscosity")
-            V_g = to_fps(st.session_state.inputs['V_g_input'], "velocity")
-            rho_g = to_fps(st.session_state.inputs['rho_g_input'], "density")
-            mu_g = to_fps(st.session_state.inputs['mu_g_input'], "viscosity")
-            sigma = st.session_state.inputs['sigma_fps'] # This is already in poundal/ft
+    try:
+        # Convert all SI inputs to FPS for consistent calculation
+        D = to_fps(st.session_state.inputs['D_input'], "length")
+        rho_l = to_fps(st.session_state.inputs['rho_l_input'], "density")
+        mu_l = to_fps(st.session_state.inputs['mu_l_input'], "viscosity")
+        V_g = to_fps(st.session_state.inputs['V_g_input'], "velocity")
+        rho_g = to_fps(st.session_state.inputs['rho_g_input'], "density")
+        mu_g = to_fps(st.session_state.inputs['mu_g_input'], "viscosity")
+        sigma = st.session_state.inputs['sigma_fps'] # This is already in poundal/ft
 
-            # --- Perform Calculations ---
-            results = {}
-            plot_data = {}
+        # --- Perform Calculations ---
+        results = {}
+        plot_data = {}
 
-            # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
-            if mu_g == 0: raise ValueError("Gas viscosity (μg) cannot be zero for Reynolds number calculation.")
-            Re_g = (D * V_g * rho_g) / mu_g
-            results['Re_g'] = Re_g
+        # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
+        if mu_g == 0: raise ValueError("Gas viscosity (μg) cannot be zero for Reynolds number calculation.")
+        Re_g = (D * V_g * rho_g) / mu_g
+        results['Re_g'] = Re_g
 
-            # Step 2: Calculate Volume Median Diameter ($d_{v50}$) without inlet device effect
-            if V_g == 0 or rho_g == 0 or rho_l == 0 or mu_l == 0:
-                raise ValueError("Gas velocity, gas density, liquid density, and liquid viscosity must be non-zero for $d_{v50}$ calculation.")
+        # Step 2: Calculate Volume Median Diameter ($d_{v50}$) without inlet device effect
+        if V_g == 0 or rho_g == 0 or rho_l == 0 or mu_l == 0:
+            raise ValueError("Gas velocity, gas density, liquid density, and liquid viscosity must be non-zero for $d_{v50}$ calculation.")
+        
+        # Corrected line: Changed Re_g**2 to Re_g**(2/3) as per user request
+        dv50_original_fps = 0.01 * (sigma / (rho_g * V_g**2)) * (Re_g**(2/3)) * ((rho_g / rho_l)**(-1/3)) * ((mu_g / mu_l)**(2/3))
+        results['dv50_original_fps'] = dv50_original_fps
+
+        # Step 3: Determine Inlet Momentum (rho_g V_g^2)
+        rho_v_squared_fps = rho_g * V_g**2
+        results['rho_v_squared_fps'] = rho_v_squared_fps
+
+        # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
+        shift_factor = get_shift_factor(st.session_state.inputs['inlet_device'], rho_v_squared_fps)
+        dv50_adjusted_fps = dv50_original_fps * shift_factor
+        results['shift_factor'] = shift_factor
+        results['dv50_adjusted_fps'] = dv50_adjusted_fps
+
+        # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
+        d_max_fps = A_DISTRIBUTION * dv50_adjusted_fps
+        results['d_max_fps'] = d_max_fps
+
+        # Step 6: Generate Volume Fraction and Cumulative Volume Fraction for a range of droplet sizes
+        dp_min_calc_fps = dv50_adjusted_fps * 0.01
+        dp_max_calc_fps = d_max_fps * 0.999
+
+        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 500)
+        
+        volume_fraction = []
+        cumulative_volume_undersize = []
+
+        for dp in dp_values_ft:
+            # Ensure dp is not equal to d_max_fps to avoid division by zero in log argument
+            if dp >= d_max_fps:
+                z_val = np.inf # Or handle as per distribution definition for upper limit
+            else:
+                z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
             
-            # Corrected line: Changed Re_g**2 to Re_g**(2/3) as per user request
-            dv50_original_fps = 0.01 * (sigma / (rho_g * V_g**2)) * (Re_g**(2/3)) * ((rho_g / rho_l)**(-1/3)) * ((mu_g / mu_l)**(2/3))
-            results['dv50_original_fps'] = dv50_original_fps
-
-            # Step 3: Determine Inlet Momentum (rho_g V_g^2)
-            rho_v_squared_fps = rho_g * V_g**2
-            results['rho_v_squared_fps'] = rho_v_squared_fps
-
-            # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
-            shift_factor = get_shift_factor(st.session_state.inputs['inlet_device'], rho_v_squared_fps)
-            dv50_adjusted_fps = dv50_original_fps * shift_factor
-            results['shift_factor'] = shift_factor
-            results['dv50_adjusted_fps'] = dv50_adjusted_fps
-
-            # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
-            d_max_fps = A_DISTRIBUTION * dv50_adjusted_fps
-            results['d_max_fps'] = d_max_fps
-
-            # Step 6: Generate Volume Fraction and Cumulative Volume Fraction for a range of droplet sizes
-            dp_min_calc_fps = dv50_adjusted_fps * 0.01
-            dp_max_calc_fps = d_max_fps * 0.999
-
-            dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 500)
+            # Handle potential division by zero for fv_dp if dp or (d_max_fps - dp) is zero
+            if dp == 0 or (d_max_fps - dp) == 0:
+                fv_dp = 0
+            else:
+                fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi * dp * (d_max_fps - dp)))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
             
-            volume_fraction = []
-            cumulative_volume_undersize = []
-
-            for dp in dp_values_ft:
-                # Ensure dp is not equal to d_max_fps to avoid division by zero in log argument
-                if dp >= d_max_fps:
-                    z_val = np.inf # Or handle as per distribution definition for upper limit
-                else:
-                    z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
-                
-                # Handle potential division by zero for fv_dp if dp or (d_max_fps - dp) is zero
-                if dp == 0 or (d_max_fps - dp) == 0:
-                    fv_dp = 0
-                else:
-                    fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi * dp * (d_max_fps - dp)))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
-                
-                volume_fraction.append(fv_dp)
-                
-                # For cumulative, erf(inf) is 1, erf(-inf) is -1
-                if z_val == np.inf:
-                    v_under = 1.0
-                elif z_val == -np.inf:
-                    v_under = 0.0
-                else:
-                    v_under = 1 - 0.5 * (1 - erf(DELTA_DISTRIBUTION * z_val))
-                cumulative_volume_undersize.append(v_under)
+            volume_fraction.append(fv_dp)
             
-            plot_data['dp_values_ft'] = dp_values_ft
-            plot_data['volume_fraction'] = volume_fraction
-            plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
+            # For cumulative, erf(inf) is 1, erf(-inf) is -1
+            if z_val == np.inf:
+                v_under = 1.0
+            elif z_val == -np.inf:
+                v_under = 0.0
+            else:
+                v_under = 1 - 0.5 * (1 - erf(DELTA_DISTRIBUTION * z_val))
+            cumulative_volume_undersize.append(v_under)
+        
+        plot_data['dp_values_ft'] = dp_values_ft
+        plot_data['volume_fraction'] = volume_fraction
+        plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
 
-            st.session_state.calculation_results = results
-            st.session_state.plot_data = plot_data
-            st.sidebar.success("Calculations complete! Navigate to other pages.")
-            st.success("Calculations complete! You can now view the results in the 'Calculation Steps' and 'Droplet Distribution Results' pages.")
+        st.session_state.calculation_results = results
+        st.session_state.plot_data = plot_data
+        st.sidebar.success("Calculations complete! Navigate to other pages.")
 
-        except Exception as e:
-            st.error(f"An error occurred during calculation: {e}")
-            st.session_state.calculation_results = None
-            st.session_state.plot_data = None
+    except Exception as e:
+        st.error(f"An error occurred during calculation: {e}")
+        st.session_state.calculation_results = None
+        st.session_state.plot_data = None
 
 
 # --- Page: Calculation Steps ---
@@ -559,7 +558,7 @@ elif page == "Calculation Steps":
         st.info("Step 6 (Generating Droplet Size Distribution Data) is performed internally to prepare data for the plot.")
 
     else:
-        st.warning("Please go to the 'Input Parameters' page and click 'Calculate Particle Size Distribution' first.")
+        st.warning("Please go to the 'Input Parameters' page and modify inputs to trigger calculations.")
 
 # --- Page: Droplet Distribution Results ---
 elif page == "Droplet Distribution Results":
@@ -614,7 +613,7 @@ elif page == "Droplet Distribution Results":
             mime="application/pdf"
         )
     else:
-        st.warning("Please go to the 'Input Parameters' page and click 'Calculate Particle Size Distribution' first to generate the plot data.")
+        st.warning("Please go to the 'Input Parameters' page and modify inputs to trigger calculations and generate the plot data.")
 
 st.markdown(r"""
 ---
