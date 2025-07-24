@@ -125,8 +125,6 @@ def from_fps(value, unit_type):
         return value / KG_M3_TO_LB_FT3
     elif unit_type == "viscosity": # lb/ft.s to Pa.s
         return value / PAS_TO_LB_FT_S
-    elif unit_type == "surface_tension": # poundal/ft to N/m
-        return value / NM_TO_POUNDAL_FT
     elif unit_type == "momentum": # lb/ft-s^2 to Pa
         return value * 1.48816 # 1 lb/ft-s^2 = 1.48816 Pa
     return value
@@ -264,7 +262,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
         pdf.image(plot_image_buffer, x=10, y=pdf.get_y(), w=pdf.w - 20)
     pdf.ln(5)
 
-    return pdf.output(dest='S').encode('latin1') # Return PDF as bytes
+    return pdf.output(dest='S') # Return PDF as bytes directly
 
 # --- Streamlit App Layout ---
 
