@@ -111,31 +111,35 @@ with col2:
     mu_g = st.number_input("Gas Viscosity (lb/ft-sec)", min_value=1e-8, value=0.00001, format="%.8f",
                             help="Viscosity of the gas phase. Example: Methane at 60°F is ~0.000007 lb/ft-sec.")
 
-# Section for Liquid Surface Tension
-st.subheader("Liquid Surface Tension")
-surface_tension_option = st.selectbox(
-    "Select Fluid System for Surface Tension",
-    options=list(SURFACE_TENSION_TABLE.keys()) + ["Custom"],
-    index=0,
-    help="Choose a typical value or enter a custom one."
-)
+# New columns for Liquid Surface Tension and Separator Inlet Device
+st.markdown("---") # Separator for visual clarity
+col_st, col_id = st.columns(2)
 
-sigma_dyne_cm = 0.0
-if surface_tension_option == "Custom":
-    sigma_dyne_cm = st.number_input("Custom Liquid Surface Tension (dyne/cm)", min_value=0.01, value=30.0, format="%.2f")
-else:
-    sigma_dyne_cm = SURFACE_TENSION_TABLE[surface_tension_option]
+with col_st:
+    st.subheader("Liquid Surface Tension")
+    surface_tension_option = st.selectbox(
+        "Select Fluid System for Surface Tension",
+        options=list(SURFACE_TENSION_TABLE.keys()) + ["Custom"],
+        index=0,
+        help="Choose a typical value or enter a custom one."
+    )
 
-sigma = sigma_dyne_cm * DYNE_CM_TO_POUNDAL_FT
-st.info(f"**Calculated Liquid Surface Tension:** {sigma:.4f} poundal/ft")
+    sigma_dyne_cm = 0.0
+    if surface_tension_option == "Custom":
+        sigma_dyne_cm = st.number_input("Custom Liquid Surface Tension (dyne/cm)", min_value=0.01, value=30.0, format="%.2f")
+    else:
+        sigma_dyne_cm = SURFACE_TENSION_TABLE[surface_tension_option]
 
-# Section for Separator Inlet Device
-st.subheader("Separator Inlet Device")
-inlet_device = st.selectbox(
-    "Choose Inlet Device Type",
-    options=["No inlet device", "Diverter plate", "Half-pipe", "Vane-type", "Cyclonic"],
-    help="The inlet device influences the droplet size distribution downstream."
-)
+    sigma = sigma_dyne_cm * DYNE_CM_TO_POUNDAL_FT
+    st.info(f"**Calculated Liquid Surface Tension:** {sigma:.4f} poundal/ft")
+
+with col_id:
+    st.subheader("Separator Inlet Device")
+    inlet_device = st.selectbox(
+        "Choose Inlet Device Type",
+        options=["No inlet device", "Diverter plate", "Half-pipe", "Vane-type", "Cyclonic"],
+        help="The inlet device influences the droplet size distribution downstream."
+    )
 
 st.markdown("---") # Separator for visual clarity
 
@@ -151,7 +155,7 @@ if st.button("Calculate Particle Size Distribution", help="Click to perform calc
             st.stop()
         Re_g = (D * V_g * rho_g) / mu_g
         st.write(f"Equation: $Re_g = \\frac{{D \\cdot V_g \\cdot \\rho_g}}{{\\mu_g}}$")
-        st.write(f"Calculation: $Re_g = \\frac{{{D:.2f} \\text{ ft} \\cdot {V_g:.2f} \\text{ ft/sec} \\cdot {rho_g:.4f} \\text{ lb/ft}^3}}{{{mu_g:.8f} \\text{ lb/ft-sec}}} = {Re_g:.2f}$")
+        st.write(f"Calculation: $Re_g = \\frac{{{D:.2f} \\text{{ ft}} \\cdot {V_g:.2f} \\text{{ ft/sec}} \\cdot {rho_g:.4f} \\text{{ lb/ft}}^3}}{{{mu_g:.8f} \\text{{ lb/ft-sec}}}} = {Re_g:.2f}$")
         st.success(f"**Result:** Superficial Gas Reynolds Number ($Re_g$) = **{Re_g:.2f}** (dimensionless)")
 
         st.markdown("---")
@@ -176,7 +180,7 @@ if st.button("Calculate Particle Size Distribution", help="Click to perform calc
         st.markdown("#### Step 3: Calculate Inlet Momentum ($\\rho_g V_g^2$)")
         rho_v_squared = rho_g * V_g**2
         st.write(f"Equation: $\\rho_g V_g^2 = \\rho_g \\cdot V_g^2$")
-        st.write(f"Calculation: $\\rho_g V_g^2 = {rho_g:.4f} \\text{ lb/ft}^3 \\cdot ({V_g:.2f} \\text{ ft/sec})^2 = {rho_v_squared:.2f} \\text{ lb/ft-sec}^2$")
+        st.write(f"Calculation: $\\rho_g V_g^2 = {rho_g:.4f} \\text{{ lb/ft}}^3 \\cdot ({V_g:.2f} \\text{{ ft/sec}})^2 = {rho_v_squared:.2f} \\text{{ lb/ft-sec}}^2$")
         st.success(f"**Result:** Inlet Momentum ($\\rho_g V_g^2$) = **{rho_v_squared:.2f} lb/ft-sec²**")
 
         st.markdown("---")
@@ -188,7 +192,7 @@ if st.button("Calculate Particle Size Distribution", help="Click to perform calc
         dv50_adjusted = dv50_original * shift_factor
         st.write(f"Based on Figure 9 from the article, for an inlet momentum of {rho_v_squared:.2f} lb/ft-sec² and a '{inlet_device}' device, the estimated shift factor is **{shift_factor:.3f}**.")
         st.write(f"Equation: $d_{{v50, adjusted}} = d_{{v50, original}} \\cdot \\text{{Shift Factor}}$")
-        st.write(f"Calculation: $d_{{v50, adjusted}} = {dv50_original:.6f} \\text{ ft} \\cdot {shift_factor:.3f} = {dv50_adjusted:.6f} \\text{ ft}$")
+        st.write(f"Calculation: $d_{{v50, adjusted}} = {dv50_original:.6f} \\text{{ ft}} \\cdot {shift_factor:.3f} = {dv50_adjusted:.6f} \\text{{ ft}}$")
         st.success(f"**Result:** Adjusted Volume Median Diameter ($d_{{v50}}$) = **{dv50_adjusted * 304800:.2f} microns** ({dv50_adjusted:.6f} ft)")
 
         st.markdown("---")
@@ -198,7 +202,7 @@ if st.button("Calculate Particle Size Distribution", help="Click to perform calc
         d_max = A_DISTRIBUTION * dv50_adjusted # d_max = 5 * d_v50 based on a = 4.0
         st.write(f"Using typical values from the article: $a = {A_DISTRIBUTION}$ and $\\delta = {DELTA_DISTRIBUTION}$.")
         st.write(f"Equation: $d_{{max}} = a \\cdot d_{{v50, adjusted}}$")
-        st.write(f"Calculation: $d_{{max}} = {A_DISTRIBUTION} \\cdot {dv50_adjusted:.6f} \\text{ ft} = {d_max:.6f} \\text{ ft}$")
+        st.write(f"Calculation: $d_{{max}} = {A_DISTRIBUTION} \\cdot {dv50_adjusted:.6f} \\text{{ ft}} = {d_max:.6f} \\text{{ ft}}$")
         st.success(f"**Result:** Maximum Droplet Size ($d_{{max}}$) = **{d_max * 304800:.2f} microns** ({d_max:.6f} ft)")
 
         st.markdown("---")
