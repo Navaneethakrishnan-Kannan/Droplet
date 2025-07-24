@@ -279,7 +279,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
 
     # --- Volume Fraction Data Table ---
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
-    if plot_data_for_table:
+    if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
         headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize"]
         # Sample 25 data points
         indices = np.linspace(0, len(plot_data_for_table['dp_values_microns']) - 1, 25, dtype=int)
@@ -294,6 +294,9 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
         
         col_widths = [40, 40, 45, 45] # Adjust column widths as needed
         pdf.add_table(headers, sampled_data, col_widths)
+    else:
+        pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
+
 
     return bytes(pdf.output(dest='S')) # Return PDF as bytes directly
 
@@ -415,6 +418,14 @@ if page == "Input Parameters":
     st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
+        # Initialize plot_data with all expected keys to avoid KeyError later
+        plot_data = {
+            'dp_values_ft': [],
+            'volume_fraction': [],
+            'cumulative_volume_undersize': [],
+            'cumulative_volume_oversize': []
+        }
+
         # Convert all SI inputs to FPS for consistent calculation
         D = to_fps(st.session_state.inputs['D_input'], "length")
         rho_l = to_fps(st.session_state.inputs['rho_l_input'], "density")
@@ -426,8 +437,7 @@ if page == "Input Parameters":
 
         # --- Perform Calculations ---
         results = {}
-        plot_data = {}
-
+        
         # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
         if mu_g == 0: raise ValueError("Gas viscosity (μg) cannot be zero for Reynolds number calculation.")
         Re_g = (D * V_g * rho_g) / mu_g
@@ -494,13 +504,12 @@ if page == "Input Parameters":
         plot_data['cumulative_volume_oversize'] = [1 - v for v in cumulative_volume_undersize] # Add this for the table
 
         st.session_state.calculation_results = results
-        st.session_state.plot_data = plot_data
-        st.sidebar.success("Calculations complete! Navigate to other pages.")
+        st.session_state.plot_data = plot_data # Assign the fully formed dictionary
 
     except Exception as e:
         st.error(f"An error occurred during calculation: {e}")
         st.session_state.calculation_results = None
-        st.session_state.plot_data = None
+        st.session_state.plot_data = None # Ensure it's None on error
 
 
 # --- Page: Calculation Steps ---
