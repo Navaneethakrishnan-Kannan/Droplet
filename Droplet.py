@@ -168,15 +168,16 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
     # --- Input Parameters ---
     pdf.add_page()
     pdf.chapter_title('1. Input Parameters (SI Units)')
+    # Replace problematic characters for PDF output
     pdf.chapter_body(f"Pipe Inside Diameter (D): {inputs['D_input']:.4f} m")
-    pdf.chapter_body(f"Liquid Density (ρl): {inputs['rho_l_input']:.2f} kg/m³")
-    pdf.chapter_body(f"Liquid Viscosity (μl): {inputs['mu_l_input']:.8f} Pa·s")
+    pdf.chapter_body(f"Liquid Density (rho_l): {inputs['rho_l_input']:.2f} kg/m^3")
+    pdf.chapter_body(f"Liquid Viscosity (mu_l): {inputs['mu_l_input']:.8f} Pa.s")
     pdf.chapter_body(f"Gas Velocity (Vg): {inputs['V_g_input']:.2f} m/s")
-    pdf.chapter_body(f"Gas Density (ρg): {inputs['rho_g_input']:.5f} kg/m³")
-    pdf.chapter_body(f"Gas Viscosity (μg): {inputs['mu_g_input']:.9f} Pa·s")
+    pdf.chapter_body(f"Gas Density (rho_g): {inputs['rho_g_input']:.5f} kg/m^3")
+    pdf.chapter_body(f"Gas Viscosity (mu_g): {inputs['mu_g_input']:.9f} Pa.s")
     
     sigma_display_val = from_fps(inputs['sigma_fps'], "surface_tension")
-    pdf.chapter_body(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
+    pdf.chapter_body(f"Liquid Surface Tension (sigma): {sigma_display_val:.3f} N/m")
     pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
     pdf.ln(5)
 
@@ -184,24 +185,24 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
     pdf.add_page()
     pdf.chapter_title('2. Step-by-Step Calculation Results')
     
-    # Define unit labels for SI system for report
-    len_unit = "m"
-    dens_unit = "kg/m³"
-    vel_unit = "m/s"
-    visc_unit = "Pa·s"
-    momentum_unit = "Pa"
-    micron_unit_label = "µm"
+    # Define unit labels for SI system for report (using ASCII-safe versions)
+    len_unit_pdf = "m"
+    dens_unit_pdf = "kg/m^3"
+    vel_unit_pdf = "m/s"
+    visc_unit_pdf = "Pa.s"
+    momentum_unit_pdf = "Pa"
+    micron_unit_label_pdf = "um"
 
     pdf.set_font('Arial', 'B', 10)
     pdf.chapter_body("Inputs Used for Calculation (Converted to FPS for internal calculation):")
     pdf.set_font('Arial', '', 10)
     pdf.chapter_body(f"  Pipe Inside Diameter (D): {to_fps(inputs['D_input'], 'length'):.2f} ft")
-    pdf.chapter_body(f"  Liquid Density (ρl): {to_fps(inputs['rho_l_input'], 'density'):.2f} lb/ft³")
-    pdf.chapter_body(f"  Liquid Viscosity (μl): {to_fps(inputs['mu_l_input'], 'viscosity'):.7f} lb/ft-sec")
+    pdf.chapter_body(f"  Liquid Density (rho_l): {to_fps(inputs['rho_l_input'], 'density'):.2f} lb/ft^3")
+    pdf.chapter_body(f"  Liquid Viscosity (mu_l): {to_fps(inputs['mu_l_input'], 'viscosity'):.7f} lb/ft-sec")
     pdf.chapter_body(f"  Gas Velocity (Vg): {to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec")
-    pdf.chapter_body(f"  Gas Density (ρg): {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft³")
-    pdf.chapter_body(f"  Gas Viscosity (μg): {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec")
-    pdf.chapter_body(f"  Liquid Surface Tension (σ): {inputs['sigma_fps']:.4f} poundal/ft")
+    pdf.chapter_body(f"  Gas Density (rho_g): {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft^3")
+    pdf.chapter_body(f"  Gas Viscosity (mu_g): {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec")
+    pdf.chapter_body(f"  Liquid Surface Tension (sigma): {inputs['sigma_fps']:.4f} poundal/ft")
     pdf.chapter_body(f"  Selected Inlet Device: {inputs['inlet_device']}")
     pdf.ln(5)
 
@@ -209,8 +210,8 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
     pdf.set_font('Arial', 'B', 10)
     pdf.chapter_body("Step 1: Calculate Superficial Gas Reynolds Number (Re_g)")
     pdf.set_font('Arial', '', 10)
-    pdf.chapter_body(f"Equation: Re_g = (D * V_g * ρ_g) / μ_g")
-    pdf.chapter_body(f"Calculation (FPS): Re_g = ({to_fps(inputs['D_input'], 'length'):.2f} ft * {to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec * {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft³) / {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec = {results['Re_g']:.2f}")
+    pdf.chapter_body(f"Equation: Re_g = (D * V_g * rho_g) / mu_g")
+    pdf.chapter_body(f"Calculation (FPS): Re_g = ({to_fps(inputs['D_input'], 'length'):.2f} ft * {to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec * {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft^3) / {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec = {results['Re_g']:.2f}")
     pdf.chapter_body(f"Result: Superficial Gas Reynolds Number (Re_g) = {results['Re_g']:.2f} (dimensionless)")
     pdf.ln(5)
 
@@ -218,18 +219,18 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
     pdf.set_font('Arial', 'B', 10)
     pdf.chapter_body("Step 2: Calculate Initial Volume Median Diameter (d_v50) (Kataoka et al., 1983)")
     pdf.set_font('Arial', '', 10)
-    pdf.chapter_body(f"Equation: d_v50 = 0.01 * (σ / (ρ_g V_g^2)) * Re_g^(2/3) * (ρ_g / ρ_l)^(-1/3) * (μ_g / μ_l)^(2/3)")
+    pdf.chapter_body(f"Equation: d_v50 = 0.01 * (sigma / (rho_g V_g^2)) * Re_g^(2/3) * (rho_g / rho_l)^(-1/3) * (mu_g / mu_l)^(2/3)")
     pdf.chapter_body(f"Calculation (FPS): d_v50 = 0.01 * ({inputs['sigma_fps']:.4f} / ({to_fps(inputs['rho_g_input'], 'density'):.4f} * {to_fps(inputs['V_g_input'], 'velocity'):.2f}^2)) * ({results['Re_g']:.2f})^(2/3) * ({to_fps(inputs['rho_g_input'], 'density'):.4f} / {to_fps(inputs['rho_l_input'], 'density'):.2f})^(-1/3) * ({to_fps(inputs['mu_g_input'], 'viscosity'):.8f} / {to_fps(inputs['mu_l_input'], 'viscosity'):.7f})^(2/3) = {results['dv50_original_fps']:.6f} ft")
-    pdf.chapter_body(f"Result: Initial Volume Median Diameter (d_v50) = {results['dv50_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label} ({from_fps(results['dv50_original_fps'], 'length'):.6f} {len_unit})")
+    pdf.chapter_body(f"Result: Initial Volume Median Diameter (d_v50) = {results['dv50_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label_pdf} ({from_fps(results['dv50_original_fps'], 'length'):.6f} {len_unit_pdf})")
     pdf.ln(5)
 
     # Step 3
     pdf.set_font('Arial', 'B', 10)
-    pdf.chapter_body("Step 3: Calculate Inlet Momentum (ρ_g V_g^2)")
+    pdf.chapter_body("Step 3: Calculate Inlet Momentum (rho_g V_g^2)")
     pdf.set_font('Arial', '', 10)
-    pdf.chapter_body(f"Equation: ρ_g V_g^2 = ρ_g * V_g^2")
-    pdf.chapter_body(f"Calculation (FPS): ρ_g V_g^2 = {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft³ * ({to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec)^2 = {results['rho_v_squared_fps']:.2f} lb/ft-sec²")
-    pdf.chapter_body(f"Result: Inlet Momentum (ρ_g V_g^2) = {from_fps(results['rho_v_squared_fps'], 'momentum'):.2f} {momentum_unit}")
+    pdf.chapter_body(f"Equation: rho_g V_g^2 = rho_g * V_g^2")
+    pdf.chapter_body(f"Calculation (FPS): rho_g V_g^2 = {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft^3 * ({to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec)^2 = {results['rho_v_squared_fps']:.2f} lb/ft-sec^2")
+    pdf.chapter_body(f"Result: Inlet Momentum (rho_g V_g^2) = {from_fps(results['rho_v_squared_fps'], 'momentum'):.2f} {momentum_unit_pdf}")
     pdf.ln(5)
 
     # Step 4
@@ -240,17 +241,17 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
     pdf.chapter_body(f"Estimated Shift Factor (from Fig. 9): {results['shift_factor']:.3f}")
     pdf.chapter_body(f"Equation: d_v50,adjusted = d_v50,original * Shift Factor")
     pdf.chapter_body(f"Calculation (FPS): d_v50,adjusted = {results['dv50_original_fps']:.6f} ft * {results['shift_factor']:.3f} = {results['dv50_adjusted_fps']:.6f} ft")
-    pdf.chapter_body(f"Result: Adjusted Volume Median Diameter (d_v50) = {results['dv50_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label} ({from_fps(results['dv50_adjusted_fps'], 'length'):.6f} {len_unit})")
+    pdf.chapter_body(f"Result: Adjusted Volume Median Diameter (d_v50) = {results['dv50_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label_pdf} ({from_fps(results['dv50_adjusted_fps'], 'length'):.6f} {len_unit_pdf})")
     pdf.ln(5)
 
     # Step 5
     pdf.set_font('Arial', 'B', 10)
     pdf.chapter_body("Step 5: Calculate Parameters for Upper-Limit Log Normal Distribution")
     pdf.set_font('Arial', '', 10)
-    pdf.chapter_body(f"Using typical values from the article: a = {A_DISTRIBUTION} and δ = {DELTA_DISTRIBUTION}.")
+    pdf.chapter_body(f"Using typical values from the article: a = {A_DISTRIBUTION} and delta = {DELTA_DISTRIBUTION}.")
     pdf.chapter_body(f"Equation: d_max = a * d_v50,adjusted")
     pdf.chapter_body(f"Calculation (FPS): d_max = {A_DISTRIBUTION} * {results['dv50_adjusted_fps']:.6f} ft = {results['d_max_fps']:.6f} ft")
-    pdf.chapter_body(f"Result: Maximum Droplet Size (d_max) = {results['d_max_fps'] * FT_TO_MICRON:.2f} {micron_unit_label} ({from_fps(results['d_max_fps'], 'length'):.6f} {len_unit})")
+    pdf.chapter_body(f"Result: Maximum Droplet Size (d_max) = {results['d_max_fps'] * FT_TO_MICRON:.2f} {micron_unit_label_pdf} ({from_fps(results['d_max_fps'], 'length'):.6f} {len_unit_pdf})")
     pdf.ln(5)
 
     # --- Droplet Distribution Plot ---
