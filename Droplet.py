@@ -262,7 +262,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
         pdf.image(plot_image_buffer, x=10, y=pdf.get_y(), w=pdf.w - 20)
     pdf.ln(5)
 
-    return pdf.output(dest='S') # Return PDF as bytes directly
+    return bytes(pdf.output(dest='S')) # Return PDF as bytes directly
 
 # --- Streamlit App Layout ---
 
@@ -616,10 +616,10 @@ elif page == "Droplet Distribution Results":
     else:
         st.warning("Please go to the 'Input Parameters' page and click 'Calculate Particle Size Distribution' first to generate the plot data.")
 
-st.markdown("""
+st.markdown(r"""
 ---
 #### Important Notes:
 * **Figure 9 Approximation:** The "Droplet Size Distribution Shift Factor" is based on a simplified interpretation of Figure 9 from the article. For highly precise engineering applications, the curves in Figure 9 would need to be digitized and accurately modeled.
-* **Log Normal Distribution Parameters:** The article states typical values for $a=4.0$ and $\delta=0.72$. The formula for $\delta$ shown in the article ($\\delta=\\frac{0.394}{log(\\frac{V_{so}}{V_{so}})}$) appears to be a typographical error, so the constant value $\\delta=0.72$ is used as indicated in the text.
+* **Log Normal Distribution Parameters:** The article states typical values for $a=4.0$ and $\delta=0.72$. The formula for $\delta$ shown in the article ($\delta=\frac{0.394}{log(\frac{V_{so}}{V_{so}})}$) appears to be a typographical error, so the constant value $\delta=0.72$ is used as indicated in the text.
 * **Units:** This application now exclusively uses the International System (SI) units for all inputs and outputs. All internal calculations are still performed in FPS units to align with the article's correlations, with automatic conversions handled internally.
 """)
