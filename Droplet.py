@@ -89,11 +89,11 @@ def on_unit_system_change():
     """Callback function to handle unit system changes and convert input values."""
     # The new value of the radio button is available via its key in session_state
     new_system = st.session_state.unit_selection_radio
-    # The previous system is stored in st.session_state.unit_system before this callback updates it
-    previous_system = st.session_state.unit_system
+    # The previous system is stored in st.session_state.unit_system_for_conversion_tracking
+    previous_system = st.session_state.unit_system_for_conversion_tracking
 
     if new_system != previous_system:
-        # Update the main unit_system state first
+        # Update the main unit_system state that controls display
         st.session_state.unit_system = new_system
 
         # Convert all stored inputs from previous_system to new_system
@@ -122,8 +122,8 @@ def on_unit_system_change():
         else: # SI
             st.session_state.inputs['sigma_fps'] = sigma_input_val_after_conversion * NM_TO_POUNDAL_FT
 
-    # Update previous_unit_system for the next change
-    st.session_state.previous_unit_system = new_system
+    # Update unit_system_for_conversion_tracking for the next change
+    st.session_state.unit_system_for_conversion_tracking = new_system
 
 # --- Streamlit App Layout ---
 
@@ -154,9 +154,9 @@ if 'inputs' not in st.session_state:
     # Initialize sigma_fps based on the initial default surface tension option
     st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
 
-# Initialize previous_unit_system to match current unit_system on first run
-if 'previous_unit_system' not in st.session_state:
-    st.session_state.previous_unit_system = st.session_state.unit_system
+# Initialize unit_system_for_conversion_tracking to match current unit_system on first run
+if 'unit_system_for_conversion_tracking' not in st.session_state:
+    st.session_state.unit_system_for_conversion_tracking = st.session_state.unit_system
 
 if 'calculation_results' not in st.session_state:
     st.session_state.calculation_results = None
