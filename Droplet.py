@@ -232,7 +232,8 @@ if page == "Input Parameters":
             if V_g == 0 or rho_g == 0 or rho_l == 0 or mu_l == 0:
                 raise ValueError("Gas velocity, gas density, liquid density, and liquid viscosity must be non-zero for $d_{v50}$ calculation.")
             
-            dv50_original_fps = 0.01 * (sigma / (rho_g * V_g**2)) * (Re_g**2) * ((rho_g / rho_l)**(-1/3)) * ((mu_g / mu_l)**(2/3))
+            # Corrected line: Changed Re_g**2 to Re_g**(2/3) as per user request
+            dv50_original_fps = 0.01 * (sigma / (rho_g * V_g**2)) * (Re_g**(2/3)) * ((rho_g / rho_l)**(-1/3)) * ((mu_g / mu_l)**(2/3))
             results['dv50_original_fps'] = dv50_original_fps
 
             # Step 3: Determine Inlet Momentum (rho_g V_g^2)
@@ -329,8 +330,9 @@ elif page == "Calculation Steps":
 
         dv50_original_display = from_fps(results['dv50_original_fps'], "length")
         
-        st.write(f"Equation: $d_{{v50}} = 0.01 \\left(\\frac{{\\sigma}}{{\\rho_g V_g^2}}\\right) Re_g^2 \\left(\\frac{{\\rho_g}}{{\\rho_l}}\\right)^{{-1/3}} \\left(\\frac{{\\mu_g}}{{\\mu_l}}\\right)^{{2/3}}$")
-        st.write(f"Calculation (FPS): $d_{{v50}} = 0.01 \\left(\\frac{{{st.session_state.inputs['sigma_fps']:.4f}}}{{{rho_g_fps:.4f} \\cdot ({V_g_fps:.2f})^2}}\\right) ({results['Re_g']:.2f})^2 \\left(\\frac{{{rho_g_fps:.4f}}}{{{rho_l_fps:.2f}}}\\right)^{{-0.333}} \\left(\\frac{{{mu_g_fps:.8f}}}{{{mu_l_fps:.7f}}}\\right)^{{0.667}}$")
+        # Updated LaTeX formula for display
+        st.write(f"Equation: $d_{{v50}} = 0.01 \\left(\\frac{{\\sigma}}{{\\rho_g V_g^2}}\\right) Re_g^{{2/3}} \\left(\\frac{{\\rho_g}}{{\\rho_l}}\\right)^{{-1/3}} \\left(\\frac{{\\mu_g}}{{\\mu_l}}\\right)^{{2/3}}$")
+        st.write(f"Calculation (FPS): $d_{{v50}} = 0.01 \\left(\\frac{{{st.session_state.inputs['sigma_fps']:.4f}}}{{{rho_g_fps:.4f} \\cdot ({V_g_fps:.2f})^2}}\\right) ({results['Re_g']:.2f})^{{2/3}} \\left(\\frac{{{rho_g_fps:.4f}}}{{{rho_l_fps:.2f}}}\\right)^{{-0.333}} \\left(\\frac{{{mu_g_fps:.8f}}}{{{mu_l_fps:.7f}}}\\right)^{{0.667}}$")
         st.success(f"**Result:** Initial Volume Median Diameter ($d_{{v50}}$) = **{results['dv50_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({dv50_original_display:.6f} {len_unit})")
 
         st.markdown("---")
