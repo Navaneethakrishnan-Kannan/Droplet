@@ -4,6 +4,7 @@ from scipy.special import erf
 import matplotlib.pyplot as plt
 from fpdf import FPDF # Import FPDF for PDF generation
 import io # For handling in-memory image data
+import pandas as pd # Import pandas for data table
 
 # --- Constants and Look-up Data (derived from the article) ---
 
@@ -70,9 +71,7 @@ def get_shift_factor(inlet_device, rho_v_squared):
             return 1.0 - (0.05 * rho_v_squared / 5000) # Roughly 0.95 at 5000
         elif rho_v_squared <= 7000:
             # From (5000, ~0.95) to (7000, ~0.7)
-            # To get 0.8 at 6000: (0.95 - 0.7) / 2 = 0.125. 0.95 - 0.125 = 0.825
-            # Let's adjust points to hit 0.8 at 6000 more precisely if needed, or keep approximation
-            # For 6000, (0.95 - (0.25 * (6000-5000)/2000)) = 0.95 - 0.125 = 0.825 (closer to 0.8)
+            # To get 0.8 at 6000: (0.95 - 0.25 * (6000-5000)/2000) = 0.95 - 0.125 = 0.825 (closer to 0.8)
             return 0.95 - (0.25 * (rho_v_squared - 5000) / 2000)
         elif rho_v_squared <= 10000:
             # From (7000, ~0.7) to (10000, ~0.5)
@@ -150,8 +149,24 @@ class PDF(FPDF):
         self.set_font('Arial', '', 10)
         self.multi_cell(0, 6, body)
         self.ln()
+        
+    def add_table(self, headers, data, col_widths):
+        # Set font for table headers
+        self.set_font('Arial', 'B', 9)
+        for i, header in enumerate(headers):
+            self.cell(col_widths[i], 7, header, 1, 0, 'C')
+        self.ln()
 
-def generate_pdf_report(inputs, results, plot_image_buffer):
+        # Set font for table data
+        self.set_font('Arial', '', 8)
+        for row in data:
+            for i, item in enumerate(row):
+                self.cell(col_widths[i], 6, str(item), 1, 0, 'C')
+            self.ln()
+        self.ln(5)
+
+
+def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table):
     pdf = PDF()
     pdf.alias_nb_pages()
     pdf.add_page()
@@ -261,6 +276,24 @@ def generate_pdf_report(inputs, results, plot_image_buffer):
     if plot_image_buffer:
         pdf.image(plot_image_buffer, x=10, y=pdf.get_y(), w=pdf.w - 20)
     pdf.ln(5)
+
+    # --- Volume Fraction Data Table ---
+    pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
+    if plot_data_for_table:
+        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize"]
+        # Sample 25 data points
+        indices = np.linspace(0, len(plot_data_for_table['dp_values_microns']) - 1, 25, dtype=int)
+        sampled_data = []
+        for i in indices:
+            sampled_data.append([
+                f"{plot_data_for_table['dp_values_microns'][i]:.2f}",
+                f"{plot_data_for_table['volume_fraction'][i]:.4f}",
+                f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
+                f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}"
+            ])
+        
+        col_widths = [40, 40, 45, 45] # Adjust column widths as needed
+        pdf.add_table(headers, sampled_data, col_widths)
 
     return bytes(pdf.output(dest='S')) # Return PDF as bytes directly
 
@@ -458,6 +491,7 @@ if page == "Input Parameters":
         plot_data['dp_values_ft'] = dp_values_ft
         plot_data['volume_fraction'] = volume_fraction
         plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
+        plot_data['cumulative_volume_oversize'] = [1 - v for v in cumulative_volume_undersize] # Add this for the table
 
         st.session_state.calculation_results = results
         st.session_state.plot_data = plot_data
@@ -573,7 +607,7 @@ elif page == "Droplet Distribution Results":
         dp_values_microns = plot_data['dp_values_ft'] * FT_TO_MICRON
         volume_fraction = plot_data['volume_fraction']
         cumulative_volume_undersize = plot_data['cumulative_volume_undersize']
-        cumulative_volume_oversize = [1 - v for v in cumulative_volume_undersize]
+        cumulative_volume_oversize = plot_data['cumulative_volume_oversize'] # Now directly from plot_data
 
         fig, ax1 = plt.subplots(figsize=(10, 6))
 
@@ -601,14 +635,42 @@ elif page == "Droplet Distribution Results":
         plt.grid(True, linestyle='--', alpha=0.7)
         st.pyplot(fig)
 
+        # --- Volume Fraction Data Table for Streamlit App ---
+        st.subheader("Volume Fraction Data Table (Sampled)")
+        if dp_values_microns.size > 0:
+            # Sample 25 data points
+            indices = np.linspace(0, len(dp_values_microns) - 1, 25, dtype=int)
+            sampled_df = pd.DataFrame({
+                "Droplet Size (µm)": [dp_values_microns[i] for i in indices],
+                "Volume Fraction": [volume_fraction[i] for i in indices],
+                "Cumulative Undersize": [cumulative_volume_undersize[i] for i in indices],
+                "Cumulative Oversize": [cumulative_volume_oversize[i] for i in indices]
+            })
+            st.dataframe(sampled_df.style.format({
+                "Droplet Size (µm)": "{:.2f}",
+                "Volume Fraction": "{:.4f}",
+                "Cumulative Undersize": "{:.4f}",
+                "Cumulative Oversize": "{:.4f}"
+            }))
+        else:
+            st.info("No data available to display in the table. Please check your input parameters.")
+
         # Save plot to a BytesIO object for PDF embedding
         buf = io.BytesIO()
         fig.savefig(buf, format="png", dpi=300)
         buf.seek(0) # Rewind to the beginning of the buffer
 
+        # Prepare data for PDF table
+        plot_data_for_pdf_table = {
+            'dp_values_microns': dp_values_microns,
+            'volume_fraction': volume_fraction,
+            'cumulative_volume_undersize': cumulative_volume_undersize,
+            'cumulative_volume_oversize': cumulative_volume_oversize
+        }
+
         st.download_button(
             label="Download Report as PDF",
-            data=generate_pdf_report(st.session_state.inputs, st.session_state.calculation_results, buf),
+            data=generate_pdf_report(st.session_state.inputs, st.session_state.calculation_results, buf, plot_data_for_pdf_table),
             file_name="Droplet_Distribution_Report.pdf",
             mime="application/pdf"
         )
