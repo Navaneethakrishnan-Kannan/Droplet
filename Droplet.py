@@ -412,14 +412,15 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     pdf.add_page() # Start a new page for the tables
     pdf.chapter_title('4. Volume Fraction Data Tables (Sampled)')
 
-    if plot_data_original and 'dp_values_microns' in plot_data_original and len(plot_data_original['dp_values_microns']) > 0:
+    # Corrected condition: check for 'dp_values_ft' and its length
+    if plot_data_original and 'dp_values_ft' in plot_data_original and len(plot_data_original['dp_values_ft']) > 0:
         headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Entrained Mass Flow (kg/s)", "Entrained Volume Flow (m^3/s)"]
         
         # Original Data Table
         full_data_original = []
-        for i in range(len(plot_data_original['dp_values_microns'])):
+        for i in range(len(plot_data_original['dp_values_ft'])): # Iterate using 'dp_values_ft'
             full_data_original.append([
-                f"{plot_data_original['dp_values_microns'][i]:.2f}",
+                f"{plot_data_original['dp_values_ft'][i] * FT_TO_MICRON:.2f}", # Convert to microns here
                 f"{plot_data_original['volume_fraction'][i]:.4f}",
                 f"{plot_data_original['cumulative_volume_undersize'][i]:.4f}",
                 f"{plot_data_original['entrained_mass_flow_rate_per_dp'][i]:.6f}",
@@ -430,12 +431,13 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     else:
         pdf.chapter_body("No data available for original distribution table. Please check your input parameters.")
     
-    if plot_data_adjusted and 'dp_values_microns' in plot_data_adjusted and len(plot_data_adjusted['dp_values_microns']) > 0:
+    # Corrected condition: check for 'dp_values_ft' and its length
+    if plot_data_adjusted and 'dp_values_ft' in plot_data_adjusted and len(plot_data_adjusted['dp_values_ft']) > 0:
         # Adjusted Data Table
         full_data_adjusted = []
-        for i in range(len(plot_data_adjusted['dp_values_microns'])):
+        for i in range(len(plot_data_adjusted['dp_values_ft'])): # Iterate using 'dp_values_ft'
             full_data_adjusted.append([
-                f"{plot_data_adjusted['dp_values_microns'][i]:.2f}",
+                f"{plot_data_adjusted['dp_values_ft'][i] * FT_TO_MICRON:.2f}", # Convert to microns here
                 f"{plot_data_adjusted['volume_fraction'][i]:.4f}",
                 f"{plot_data_adjusted['cumulative_volume_undersize'][i]:.4f}",
                 f"{plot_data_adjusted['entrained_mass_flow_rate_per_dp'][i]:.6f}",
@@ -474,6 +476,11 @@ def _generate_distribution_data(dv50_value_fps, d_max_value_fps, num_points, E_f
         'entrained_mass_flow_rate_per_dp': [],
         'entrained_volume_flow_rate_per_dp': []
     }
+
+    # Add a check for valid dv50 and d_max values
+    if dv50_value_fps <= 0 or d_max_value_fps <= 0 or d_max_value_fps < dv50_value_fps:
+        st.warning(f"Warning: Invalid droplet size range calculated (dv50: {dv50_value_fps:.6f} ft, d_max: {d_max_value_fps:.6f} ft). Check input parameters.")
+        return plot_data # Return empty data
 
     dp_min_calc_fps = dv50_value_fps * 0.01
     dp_max_calc_fps = d_max_value_fps * 0.999
@@ -597,7 +604,7 @@ def _perform_main_calculations(inputs):
     
     E_fraction = calculate_e_interpolated(Ug_si, Wl_for_e_calc)
         
-    Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
+    Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_si
     
     Q_entrained_total_volume_flow_rate_si = 0.0
     if rho_l_input_si > 0:
