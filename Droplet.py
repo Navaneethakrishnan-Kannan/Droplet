@@ -389,20 +389,19 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.add_page() # Start a new page for the table
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
     if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
-        headers = ["Droplet Size (um)", "Volume Fraction", "Mass Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Flow (kg/s)"]
+        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Flow (kg/s)"] # Removed Mass Fraction
         # Use all points for the PDF table
         full_data = []
         for i in range(len(plot_data_for_table['dp_values_microns'])):
             full_data.append([
                 f"{plot_data_for_table['dp_values_microns'][i]:.2f}",
                 f"{plot_data_for_table['volume_fraction'][i]:.4f}", # Use normalized for table
-                f"{plot_data_for_table['volume_fraction'][i]:.4f}", # Mass Fraction is same as normalized volume fraction
                 f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
                 f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}",
                 f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}" # New column
             ])
         
-        col_widths = [30, 30, 30, 40, 40, 40] # Adjust column widths as needed
+        col_widths = [30, 30, 40, 40, 40] # Adjust column widths as needed for removed column
         pdf.add_table(headers, full_data, col_widths)
     else:
         pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
@@ -585,7 +584,7 @@ if page == "Input Parameters":
         dp_min_calc_fps = dv50_adjusted_fps * 0.01
         dp_max_calc_fps = d_max_fps * 0.999
 
-        # Changed number of points from 100 to 20 as per user request
+        # Changed number of points to 20 as per user request
         dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 20)
         
         volume_fraction_pdf_values = [] # Store PDF values initially
@@ -807,7 +806,6 @@ elif page == "Droplet Distribution Results":
             full_df = pd.DataFrame({
                 "Droplet Size (µm)": dp_values_microns,
                 "Volume Fraction": volume_fraction_for_plot,
-                "Mass Fraction": volume_fraction_for_plot, # Mass Fraction is same as normalized volume fraction
                 "Cumulative Undersize": cumulative_volume_undersize,
                 "Cumulative Oversize": cumulative_volume_oversize,
                 f"Entrained Flow ({mass_flow_unit})": entrained_mass_flow_rate_per_dp
@@ -815,7 +813,6 @@ elif page == "Droplet Distribution Results":
             st.dataframe(full_df.style.format({
                 "Droplet Size (µm)": "{:.2f}",
                 "Volume Fraction": "{:.4f}",
-                "Mass Fraction": "{:.4f}",
                 "Cumulative Undersize": "{:.4f}",
                 "Cumulative Oversize": "{:.4f}",
                 f"Entrained Flow ({mass_flow_unit})": "{:.6f}"
