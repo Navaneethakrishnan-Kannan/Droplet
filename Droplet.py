@@ -72,10 +72,10 @@ def get_shift_factor(inlet_device, rho_v_squared):
 
     # Check if rho_v_squared is outside the defined range
     if rho_v_squared < x_values.min():
-        st.warning(f"Inlet momentum ({rho_v_squared:.2f} Pa) is below the minimum defined for '{inlet_device}' ({x_values.min():.2f} Pa). Using minimum shift factor: {y_values.min():.3f}.")
+        st.warning(f"Inlet momentum ({rho_v_squared:.2f} lb/ft-sec^2) is below the minimum defined for '{inlet_device}' ({x_values.min():.2f} lb/ft-sec^2). Using minimum shift factor: {y_values.min():.3f}.")
         return y_values.min() # Use the smallest shift factor if below range
     elif rho_v_squared > x_values.max():
-        st.warning(f"Inlet momentum ({rho_v_squared:.2f} Pa) is above the maximum defined for '{inlet_device}' ({x_values.max():.2f} Pa). Using maximum shift factor: {y_values.max():.3f}.")
+        st.warning(f"Inlet momentum ({rho_v_squared:.2f} lb/ft-sec^2) is above the maximum defined for '{inlet_device}' ({x_values.max():.2f} lb/ft-sec^2). Using maximum shift factor: {y_values.max():.3f}.")
         return y_values.max() # Use the largest shift factor if above range
 
     # Perform linear interpolation
@@ -567,7 +567,7 @@ if page == "Input Parameters":
 
         # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
         # The get_shift_factor function now handles interpolation and warnings
-        shift_factor = get_shift_factor(st.session_state.inputs['inlet_device'], from_fps(rho_v_squared_fps, 'momentum')) # Pass SI unit for rho_v_squared to get_shift_factor for consistent data handling
+        shift_factor = get_shift_factor(st.session_state.inputs['inlet_device'], rho_v_squared_fps) # Corrected: Pass FPS value directly
         dv50_adjusted_fps = dv50_original_fps * shift_factor
         results['shift_factor'] = shift_factor
         results['dv50_adjusted_fps'] = dv50_adjusted_fps
