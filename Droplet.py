@@ -390,21 +390,20 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
     if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
         headers = ["Droplet Size (um)", "Volume Fraction", "Mass Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Flow (kg/s)"]
-        # Sample 25 data points
-        indices = np.linspace(0, len(plot_data_for_table['dp_values_microns']) - 1, 25, dtype=int)
-        sampled_data = []
-        for i in indices:
-            sampled_data.append([
+        # Use all points for the PDF table
+        full_data = []
+        for i in range(len(plot_data_for_table['dp_values_microns'])):
+            full_data.append([
                 f"{plot_data_for_table['dp_values_microns'][i]:.2f}",
-                f"{plot_data_for_table['normalized_volume_fraction'][i]:.4f}", # Use normalized for table
-                f"{plot_data_for_table['normalized_volume_fraction'][i]:.4f}", # Mass Fraction is same as normalized volume fraction
+                f"{plot_data_for_table['volume_fraction'][i]:.4f}", # Use normalized for table
+                f"{plot_data_for_table['volume_fraction'][i]:.4f}", # Mass Fraction is same as normalized volume fraction
                 f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
                 f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}",
                 f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}" # New column
             ])
         
         col_widths = [30, 30, 30, 40, 40, 40] # Adjust column widths as needed
-        pdf.add_table(headers, sampled_data, col_widths)
+        pdf.add_table(headers, full_data, col_widths)
     else:
         pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
 
@@ -586,7 +585,8 @@ if page == "Input Parameters":
         dp_min_calc_fps = dv50_adjusted_fps * 0.01
         dp_max_calc_fps = d_max_fps * 0.999
 
-        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 500)
+        # Changed number of points from 500 to 200 as per user request
+        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 200)
         
         volume_fraction_pdf_values = [] # Store PDF values initially
 
@@ -801,31 +801,30 @@ elif page == "Droplet Distribution Results":
         st.pyplot(fig)
 
         # --- Volume Fraction Data Table for Streamlit App ---
-        st.subheader("Volume Fraction Data Table (Sampled)")
+        st.subheader("Volume Fraction Data Table (All 200 Points)")
         if dp_values_microns.size > 0:
-            # Sample 25 data points
-            indices = np.linspace(0, len(dp_values_microns) - 1, 25, dtype=int)
-            sampled_df = pd.DataFrame({
-                "Droplet Size (µm)": [dp_values_microns[i] for i in indices],
-                "Volume Fraction": [volume_fraction_for_plot[i] for i in indices],
-                "Mass Fraction": [volume_fraction_for_plot[i] for i in indices], # Mass Fraction is same as normalized volume fraction
-                "Cumulative Undersize": [cumulative_volume_undersize[i] for i in indices],
-                "Cumulative Oversize": [cumulative_volume_oversize[i] for i in indices],
-                f"Entrained Flow ({mass_flow_unit})": [entrained_mass_flow_rate_per_dp[i] for i in indices] # New column
+            # Display all 200 data points as requested
+            full_df = pd.DataFrame({
+                "Droplet Size (µm)": dp_values_microns,
+                "Volume Fraction": volume_fraction_for_plot,
+                "Mass Fraction": volume_fraction_for_plot, # Mass Fraction is same as normalized volume fraction
+                "Cumulative Undersize": cumulative_volume_undersize,
+                "Cumulative Oversize": cumulative_volume_oversize,
+                f"Entrained Flow ({mass_flow_unit})": entrained_mass_flow_rate_per_dp
             })
-            st.dataframe(sampled_df.style.format({
+            st.dataframe(full_df.style.format({
                 "Droplet Size (µm)": "{:.2f}",
                 "Volume Fraction": "{:.4f}",
                 "Mass Fraction": "{:.4f}",
                 "Cumulative Undersize": "{:.4f}",
                 "Cumulative Oversize": "{:.4f}",
-                f"Entrained Flow ({mass_flow_unit})": "{:.6f}" # Format for new column
+                f"Entrained Flow ({mass_flow_unit})": "{:.6f}"
             }))
             
             # Display sum check for verification
-            st.markdown(f"**Sum of Entrained Flow in Table (for sampled points):** {np.sum([entrained_mass_flow_rate_per_dp[i] for i in indices]):.6f} {mass_flow_unit}")
+            st.markdown(f"**Sum of Entrained Flow in Table:** {np.sum(entrained_mass_flow_rate_per_dp):.6f} {mass_flow_unit}")
             st.markdown(f"**Total Entrained Liquid Mass Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_mass_flow_rate_si']:.6f} {mass_flow_unit}")
-            st.info("Note: The sum of 'Entrained Flow' for sampled points in the table is an approximation. The actual sum over the full distribution range would precisely match the 'Total Entrained Liquid Mass Flow Rate' from Step 6, as the volume frequency distribution is now normalized.")
+            st.info("Note: The sum of 'Entrained Flow' in the table should now precisely match the 'Total Entrained Liquid Mass Flow Rate' from Step 6, as the volume frequency distribution is normalized and all calculated points are displayed.")
 
         else:
             st.info("No data available to display in the table. Please check your input parameters.")
@@ -835,13 +834,13 @@ elif page == "Droplet Distribution Results":
         fig.savefig(buf, format="png", dpi=300)
         buf.seek(0) # Rewind to the beginning of the buffer
 
-        # Prepare data for PDF table
+        # Prepare data for PDF table (all 200 points)
         plot_data_for_pdf_table = {
             'dp_values_microns': dp_values_microns,
             'volume_fraction': volume_fraction_for_plot, # Pass normalized for PDF table
             'cumulative_volume_undersize': cumulative_volume_undersize,
             'cumulative_volume_oversize': cumulative_volume_oversize,
-            'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp # Pass new data
+            'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp
         }
 
         st.download_button(
