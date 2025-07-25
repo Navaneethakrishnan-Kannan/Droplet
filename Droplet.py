@@ -390,7 +390,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.add_page() # Start a new page for the table
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
     if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
-        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Mass Flow (kg/s)", "Entrained Volume Flow (m^3/s)"] # Added Volume Flow
+        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Entrained Mass Flow (kg/s)", "Entrained Volume Flow (m^3/s)"] # Removed Cumulative Oversize
         # Use all points for the PDF table
         full_data = []
         for i in range(len(plot_data_for_table['dp_values_microns'])):
@@ -398,12 +398,11 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
                 f"{plot_data_for_table['dp_values_microns'][i]:.2f}",
                 f"{plot_data_for_table['volume_fraction'][i]:.4f}", # Use normalized for table
                 f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
-                f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}",
                 f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}",
                 f"{plot_data_for_table['entrained_volume_flow_rate_per_dp'][i]:.9f}" # Added Volume Flow
             ])
         
-        col_widths = [25, 25, 35, 35, 40, 45] # Adjusted column widths
+        col_widths = [25, 25, 35, 40, 45] # Adjusted column widths
         pdf.add_table(headers, full_data, col_widths)
     else:
         pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
@@ -827,7 +826,6 @@ elif page == "Droplet Distribution Results":
                 "Droplet Size (µm)": dp_values_microns,
                 "Volume Fraction": volume_fraction_for_plot,
                 "Cumulative Undersize": cumulative_volume_undersize,
-                "Cumulative Oversize": cumulative_volume_oversize,
                 f"Entrained Mass Flow ({mass_flow_unit})": entrained_mass_flow_rate_per_dp,
                 f"Entrained Volume Flow ({vol_flow_unit})": entrained_volume_flow_rate_per_dp # New column
             })
@@ -835,7 +833,6 @@ elif page == "Droplet Distribution Results":
                 "Droplet Size (µm)": "{:.2f}",
                 "Volume Fraction": "{:.4f}",
                 "Cumulative Undersize": "{:.4f}",
-                "Cumulative Oversize": "{:.4f}",
                 f"Entrained Mass Flow ({mass_flow_unit})": "{:.6f}",
                 f"Entrained Volume Flow ({vol_flow_unit})": "{:.9f}" # Format for new column
             }))
@@ -860,7 +857,7 @@ elif page == "Droplet Distribution Results":
             'dp_values_microns': dp_values_microns,
             'volume_fraction': volume_fraction_for_plot, # Pass normalized for PDF table
             'cumulative_volume_undersize': cumulative_volume_undersize,
-            'cumulative_volume_oversize': cumulative_volume_oversize,
+            'cumulative_volume_oversize': cumulative_volume_oversize, # Keep this in plot_data for internal consistency if needed elsewhere, but not used in PDF table
             'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp,
             'entrained_volume_flow_rate_per_dp': entrained_volume_flow_rate_per_dp # Pass new data
         }
