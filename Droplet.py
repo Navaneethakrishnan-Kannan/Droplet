@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from fpdf import FPDF # Import FPDF for PDF generation
 import io # For handling in-memory image data
 import pandas as pd # Import pandas for data table
+import math # Import math for new calculations
 
 # --- Constants and Look-up Data (derived from the article) ---
 
@@ -128,6 +129,99 @@ def from_fps(value, unit_type):
         return value * 1.48816 # 1 lb/ft-s^2 = 1.48816 Pa
     return value
 
+# --- Functions for E (Entrainment Fraction) Calculation ---
+def calculate_e_from_specific_equation(Ug_val, Wl_mass_flow):
+    """
+    Calculates E using one of the five specific empirical equations.
+    
+    Args:
+        Ug_val (int/float): The specific Ug value (6, 7, 9, 11, or 34).
+        Wl_mass_flow (float): The Total Liquid Mass Flow Rate (kg/s), used directly as Wl for empirical equation.
+        
+    Returns:
+        float: The calculated E value.
+        
+    Raises:
+        ValueError: If Ug_val is not one of the predefined values.
+    """
+    if Ug_val == 6:
+        A = 0.35
+        B = -0.07
+        C = 3.65
+    elif Ug_val == 7:
+        A = 0.5
+        B = -0.1
+        C = 3.8
+    elif Ug_val == 9:
+        A = 0.74
+        B = -0.15
+        C = 3.67
+    elif Ug_val == 11:
+        A = 0.86
+        B = -0.19
+        C = 4.09
+    elif Ug_val == 34:
+        A = 0.99
+        B = -0.19
+        C = 3.85
+    else:
+        # This case should ideally not be reached if clamping is done correctly before calling.
+        # It's a safeguard if this function is called directly with an unhandled Ug_val.
+        raise ValueError(f"No specific equation found for Ug = {Ug_val}. Must be one of 6, 7, 9, 11, 34.")
+    
+    # Wl_mass_flow is directly used as Wl as per user's instruction
+    return A + B * math.exp(-C * Wl_mass_flow)
+
+def calculate_e_interpolated(Ug_target, Wl_mass_flow):
+    """
+    Calculates E for a given Ug_target and Wl_mass_flow using linear interpolation
+    between the known specific Ug equations. Handles out-of-range Ug_target
+    by clamping to the nearest boundary (6 or 34).
+    
+    Args:
+        Ug_target (float): The target Ug value (gas velocity in m/s) for which to calculate E.
+        Wl_mass_flow (float): The Total Liquid Mass Flow Rate (kg/s), used directly as Wl for empirical equation.
+        
+    Returns:
+        float: The interpolated E value (entrainment fraction).
+    """
+    known_ug_values = [6, 7, 9, 11, 34]
+    
+    # Clamp Ug_target to the valid range
+    clamped_ug_target = max(min(Ug_target, max(known_ug_values)), min(known_ug_values))
+    
+    if clamped_ug_target in known_ug_values:
+        # If clamped_ug_target is one of the known values, use its direct equation
+        return calculate_e_from_specific_equation(clamped_ug_target, Wl_mass_flow)
+
+    # Find the two bracketing Ug values for the clamped target
+    Ug_low = None
+    Ug_high = None
+    for i in range(len(known_ug_values) - 1):
+        if known_ug_values[i] < clamped_ug_target < known_ug_values[i+1]:
+            Ug_low = known_ug_values[i]
+            Ug_high = known_ug_values[i+1]
+            break
+    
+    if Ug_low is None or Ug_high is None:
+        # This case should not be reached with the clamping logic, but as a safeguard.
+        # This might happen if Ug_target is exactly equal to the max or min known_ug_values
+        # but not caught by the `in known_ug_values` check due to float precision.
+        # For robustness, we can return the clamped value's direct calculation here too.
+        return calculate_e_from_specific_equation(clamped_ug_target, Wl_mass_flow)
+
+
+    # Calculate E at the lower and higher Ug values using their specific equations
+    E_low = calculate_e_from_specific_equation(Ug_low, Wl_mass_flow)
+    E_high = calculate_e_from_specific_equation(Ug_high, Wl_mass_flow)
+    
+    # Perform linear interpolation
+    E_interpolated = E_low + (E_high - E_low) * \
+                     ((clamped_ug_target - Ug_low) / (Ug_high - Ug_low))
+                     
+    return E_interpolated
+
+
 # --- PDF Report Generation Function ---
 class PDF(FPDF):
     def header(self):
@@ -192,6 +286,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     sigma_display_val = from_fps(inputs['sigma_fps'], "surface_tension")
     pdf.chapter_body(f"Liquid Surface Tension (sigma): {sigma_display_val:.3f} N/m")
     pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
+    pdf.chapter_body(f"Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} kg/s") # New input
     pdf.ln(5)
 
     # --- Calculation Steps ---
@@ -205,6 +300,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     visc_unit_pdf = "Pa.s"
     momentum_unit_pdf = "Pa"
     micron_unit_label_pdf = "um"
+    mass_flow_unit_pdf = "kg/s"
 
     pdf.set_font('Arial', 'B', 10)
     pdf.chapter_body("Inputs Used for Calculation (Converted to FPS for internal calculation):")
@@ -217,6 +313,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"  Gas Viscosity (mu_g): {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec")
     pdf.chapter_body(f"  Liquid Surface Tension (sigma): {inputs['sigma_fps']:.4f} poundal/ft")
     pdf.chapter_body(f"  Selected Inlet Device: {inputs['inlet_device']}")
+    pdf.chapter_body(f"  Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit_pdf}") # New input
     pdf.ln(5)
 
     # Step 1
@@ -267,6 +364,17 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"Result: Maximum Droplet Size (d_max) = {results['d_max_fps'] * FT_TO_MICRON:.2f} {micron_unit_label_pdf} ({from_fps(results['d_max_fps'], 'length'):.6f} {len_unit_pdf})")
     pdf.ln(5)
 
+    # Step 6: Entrainment Fraction (E) Calculation
+    pdf.set_font('Arial', 'B', 10)
+    pdf.chapter_body("Step 6: Calculate Entrainment Fraction (E)")
+    pdf.set_font('Arial', '', 10)
+    pdf.chapter_body(f"Gas Velocity (Ug): {inputs['V_g_input']:.2f} m/s")
+    pdf.chapter_body(f"Liquid Loading (Wl): {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit_pdf}")
+    pdf.chapter_body(f"Result: Entrainment Fraction (E) = {results['E_fraction']:.4f} (dimensionless)")
+    pdf.chapter_body(f"Result: Total Entrained Liquid Mass Flow Rate = {results['Q_entrained_total_mass_flow_rate_si']:.4f} {mass_flow_unit_pdf}")
+    pdf.ln(5)
+
+
     # --- Droplet Distribution Plot ---
     pdf.add_page()
     pdf.chapter_title('3. Droplet Distribution Results')
@@ -281,7 +389,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.add_page() # Start a new page for the table
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
     if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
-        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize"]
+        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Flow (kg/s)"]
         # Sample 25 data points
         indices = np.linspace(0, len(plot_data_for_table['dp_values_microns']) - 1, 25, dtype=int)
         sampled_data = []
@@ -290,10 +398,11 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
                 f"{plot_data_for_table['dp_values_microns'][i]:.2f}",
                 f"{plot_data_for_table['volume_fraction'][i]:.4f}",
                 f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
-                f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}"
+                f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}",
+                f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}" # New column
             ])
         
-        col_widths = [40, 40, 45, 45] # Adjust column widths as needed
+        col_widths = [35, 35, 40, 40, 45] # Adjust column widths as needed
         pdf.add_table(headers, sampled_data, col_widths)
     else:
         pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
@@ -325,6 +434,7 @@ if 'inputs' not in st.session_state:
         'surface_tension_option': "Water/gas",
         'sigma_custom': 0.03, # N/m (30 dyne/cm)
         'inlet_device': "No inlet device",
+        'Q_liquid_mass_flow_rate_input': 0.1, # New input: kg/s (example value)
     }
     # Initialize sigma_fps based on the initial default surface tension option
     st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE_DYNE_CM["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
@@ -350,6 +460,7 @@ if page == "Input Parameters":
     vel_unit = "m/s"
     visc_unit = "Pa·s"
     surf_tens_input_unit = "N/m"
+    mass_flow_unit = "kg/s"
 
     st.subheader("Feed Pipe Conditions")
     col1, col2 = st.columns(2)
@@ -367,6 +478,9 @@ if page == "Input Parameters":
                                 help="Density of the gas phase.")
         st.session_state.inputs['mu_g_input'] = st.number_input(f"Gas Viscosity ({visc_unit})", min_value=1e-9, value=st.session_state.inputs['mu_g_input'], format="%.9f", key='mu_g_input_widget',
                                 help=f"Viscosity of the gas phase. Example: Methane at 20°C is ~0.000011 Pa·s.")
+    
+    st.session_state.inputs['Q_liquid_mass_flow_rate_input'] = st.number_input(f"Total Liquid Mass Flow Rate ({mass_flow_unit})", min_value=0.0, value=st.session_state.inputs['Q_liquid_mass_flow_rate_input'], format="%.2f", key='Q_liquid_mass_flow_rate_input_widget',
+                                help="The total mass flow rate of the liquid phase entering the system. This value is directly used as 'Wl' in the entrainment calculation.")
 
     st.markdown("---")
     col_st, col_id = st.columns(2)
@@ -424,7 +538,8 @@ if page == "Input Parameters":
             'dp_values_ft': [],
             'volume_fraction': [],
             'cumulative_volume_undersize': [],
-            'cumulative_volume_oversize': []
+            'cumulative_volume_oversize': [],
+            'entrained_mass_flow_rate_per_dp': [] # New key for entrained flow rate per droplet size
         }
 
         # Convert all SI inputs to FPS for consistent calculation
@@ -504,6 +619,29 @@ if page == "Input Parameters":
         plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
         plot_data['cumulative_volume_oversize'] = [1 - v for v in cumulative_volume_undersize] # Add this for the table
 
+        # --- New E and Entrained Flow Calculations ---
+        Ug_si = st.session_state.inputs['V_g_input']
+        Q_liquid_mass_flow_rate_input_si = st.session_state.inputs['Q_liquid_mass_flow_rate_input']
+        
+        # As per user's instruction, Wl for the empirical equation is directly the total liquid mass flow rate
+        Wl_for_e_calc = Q_liquid_mass_flow_rate_input_si
+        
+        E_fraction = calculate_e_interpolated(Ug_si, Wl_for_e_calc)
+        
+        Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
+
+        # results['Wl_dimensionless'] = Wl_dimensionless # Removed as per user's instruction
+        results['Wl_for_e_calc'] = Wl_for_e_calc # Store the value used for E calculation
+        results['E_fraction'] = E_fraction
+        results['Q_entrained_total_mass_flow_rate_si'] = Q_entrained_total_mass_flow_rate_si
+
+        # Calculate entrained mass flow rate per droplet size interval
+        entrained_mass_flow_rate_per_dp = [
+            fv * Q_entrained_total_mass_flow_rate_si for fv in volume_fraction
+        ]
+        plot_data['entrained_mass_flow_rate_per_dp'] = entrained_mass_flow_rate_per_dp
+
+
         st.session_state.calculation_results = results
         st.session_state.plot_data = plot_data # Assign the fully formed dictionary
 
@@ -527,6 +665,7 @@ elif page == "Calculation Steps":
         visc_unit = "Pa·s"
         momentum_unit = "Pa"
         micron_unit_label = "µm"
+        mass_flow_unit = "kg/s"
 
         # Display inputs used for calculation (original SI values)
         st.subheader("Inputs Used for Calculation (SI Units)")
@@ -540,6 +679,7 @@ elif page == "Calculation Steps":
         sigma_display_val = from_fps(st.session_state.inputs['sigma_fps'], "surface_tension")
         st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
         st.write(f"Selected Inlet Device: {st.session_state.inputs['inlet_device']}")
+        st.write(f"Total Liquid Mass Flow Rate: {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}") # New input
         st.markdown("---")
 
         # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
@@ -599,7 +739,15 @@ elif page == "Calculation Steps":
 
         st.markdown("---")
 
-        st.info("Step 6 (Generating Droplet Size Distribution Data) is performed internally to prepare data for the plot.")
+        # Step 6: Entrainment Fraction (E) Calculation
+        st.markdown("#### Step 6: Calculate Entrainment Fraction (E)")
+        st.write(f"Gas Velocity (Ug): {st.session_state.inputs['V_g_input']:.2f} {vel_unit}")
+        st.write(f"Liquid Loading (Wl): {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit} (as per user's instruction)")
+        st.success(f"**Result:** Entrainment Fraction (E) = **{results['E_fraction']:.4f}** (dimensionless)")
+        st.success(f"**Result:** Total Entrained Liquid Mass Flow Rate = **{results['Q_entrained_total_mass_flow_rate_si']:.4f} {mass_flow_unit}**")
+        st.markdown("---")
+
+        st.info("Step 7 (Generating Droplet Size Distribution Data and Entrained Flow per size) is performed internally to prepare data for the plot and table.")
 
     else:
         st.warning("Please go to the 'Input Parameters' page and modify inputs to trigger calculations.")
@@ -613,11 +761,13 @@ elif page == "Droplet Distribution Results":
         
         # Define unit labels for plotting
         micron_unit_label = "µm" # Always SI for this version
+        mass_flow_unit = "kg/s"
 
         dp_values_microns = plot_data['dp_values_ft'] * FT_TO_MICRON
         volume_fraction = plot_data['volume_fraction']
         cumulative_volume_undersize = plot_data['cumulative_volume_undersize']
-        cumulative_volume_oversize = plot_data['cumulative_volume_oversize'] # Now directly from plot_data
+        cumulative_volume_oversize = plot_data['cumulative_volume_oversize'] 
+        entrained_mass_flow_rate_per_dp = plot_data['entrained_mass_flow_rate_per_dp'] # New data
 
         fig, ax1 = plt.subplots(figsize=(10, 6))
 
@@ -654,13 +804,15 @@ elif page == "Droplet Distribution Results":
                 "Droplet Size (µm)": [dp_values_microns[i] for i in indices],
                 "Volume Fraction": [volume_fraction[i] for i in indices],
                 "Cumulative Undersize": [cumulative_volume_undersize[i] for i in indices],
-                "Cumulative Oversize": [cumulative_volume_oversize[i] for i in indices]
+                "Cumulative Oversize": [cumulative_volume_oversize[i] for i in indices],
+                f"Entrained Flow ({mass_flow_unit})": [entrained_mass_flow_rate_per_dp[i] for i in indices] # New column
             })
             st.dataframe(sampled_df.style.format({
                 "Droplet Size (µm)": "{:.2f}",
                 "Volume Fraction": "{:.4f}",
                 "Cumulative Undersize": "{:.4f}",
-                "Cumulative Oversize": "{:.4f}"
+                "Cumulative Oversize": "{:.4f}",
+                f"Entrained Flow ({mass_flow_unit})": "{:.6f}" # Format for new column
             }))
         else:
             st.info("No data available to display in the table. Please check your input parameters.")
@@ -675,7 +827,8 @@ elif page == "Droplet Distribution Results":
             'dp_values_microns': dp_values_microns,
             'volume_fraction': volume_fraction,
             'cumulative_volume_undersize': cumulative_volume_undersize,
-            'cumulative_volume_oversize': cumulative_volume_oversize
+            'cumulative_volume_oversize': cumulative_volume_oversize,
+            'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp # Pass new data
         }
 
         st.download_button(
@@ -693,4 +846,5 @@ st.markdown(r"""
 * **Figure 9 Approximation:** The "Droplet Size Distribution Shift Factor" is based on a simplified interpretation of Figure 9 from the article. For highly precise engineering applications, the curves in Figure 9 would need to be digitized and accurately modeled.
 * **Log Normal Distribution Parameters:** The article states typical values for $a=4.0$ and $\delta=0.72$. The formula for $\delta$ shown in the article ($\delta=\frac{0.394}{log(\frac{V_{so}}{V_{so}})}$) appears to be a typographical error, so the constant value $\delta=0.72$ is used as indicated in the text.
 * **Units:** This application now exclusively uses the International System (SI) units for all inputs and outputs. All internal calculations are still performed in FPS units to align with the article's correlations, with automatic conversions handled internally.
+* **Entrainment Fraction (E) Calculation:** As per your instruction, the 'Wl' parameter in the empirical equations for Entrainment Fraction (E) is now directly the 'Total Liquid Mass Flow Rate' (kg/s) provided by the user. Linear interpolation is applied for Ug values between the defined points. The accuracy of these correlations is dependent on the range and conditions for which they were originally developed.
 """)
