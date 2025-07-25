@@ -359,9 +359,17 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     pdf.chapter_body("Step 5: Calculate Parameters for Upper-Limit Log Normal Distribution")
     pdf.set_font('Arial', '', 10)
     pdf.chapter_body(f"Using typical values from the article: a = {A_DISTRIBUTION} and delta = {DELTA_DISTRIBUTION}.")
-    pdf.chapter_body(f"Equation: d_max = a * d_v50,adjusted")
-    pdf.chapter_body(f"Calculation (FPS): d_max = {A_DISTRIBUTION} * {results['dv50_adjusted_fps']:.6f} ft = {results['d_max_fps']:.6f} ft")
-    pdf.chapter_body(f"Result: Maximum Droplet Size (d_max) = {results['d_max_fps'] * FT_TO_MICRON:.2f} {micron_unit_label_pdf} ({from_fps(results['d_max_fps'], 'length'):.6f} {len_unit_pdf})")
+    
+    pdf.chapter_body(f"For **Original** $d_{{v50}}$:")
+    pdf.chapter_body(f"Equation: $d_{{max, original}} = a \\cdot d_{{v50, original}}$")
+    pdf.chapter_body(f"Calculation (FPS): $d_{{max, original}} = {A_DISTRIBUTION} \\cdot {results['dv50_original_fps']:.6f} \\text{{ ft}} = {results['d_max_original_fps']:.6f} \\text{{ ft}}$")
+    pdf.chapter_body(f"Result: Maximum Droplet Size (Original $d_{{max}}$) = {results['d_max_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label_pdf} ({from_fps(results['d_max_original_fps'], 'length'):.6f} {len_unit_pdf})")
+    pdf.ln(2) # Small line break for readability
+
+    pdf.chapter_body(f"For **Adjusted** $d_{{v50}}$:")
+    pdf.chapter_body(f"Equation: $d_{{max, adjusted}} = a \\cdot d_{{v50, adjusted}}$")
+    pdf.chapter_body(f"Calculation (FPS): $d_{{max, adjusted}} = {A_DISTRIBUTION} \\cdot {results['dv50_adjusted_fps']:.6f} \\text{{ ft}} = {results['d_max_adjusted_fps']:.6f} \\text{{ ft}}$")
+    pdf.chapter_body(f"Result: Maximum Droplet Size (Adjusted $d_{{max}}$) = {results['d_max_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label_pdf} ({from_fps(results['d_max_adjusted_fps'], 'length'):.6f} {len_unit_pdf})")
     pdf.ln(5)
 
     # Step 6: Entrainment Fraction (E) Calculation
@@ -1040,5 +1048,5 @@ st.markdown(r"""
 * **Log Normal Distribution Parameters:** The article states typical values for $a=4.0$ and $\delta=0.72$. The formula for $\delta$ shown in the article ($\delta=\frac{0.394}{log(\frac{V_{so}}{V_{so}})}$) appears to be a typographical error, so the constant value $\delta=0.72$ is used as indicated in the text.
 * **Units:** This application now exclusively uses the International System (SI) units for all inputs and outputs. All internal calculations are still performed in FPS units to align with the article's correlations, with automatic conversions handled internally.
 * **Entrainment Fraction (E) Calculation:** As per your instruction, the 'Wl' parameter in the empirical equations for Entrainment Fraction (E) is now directly the 'Total Liquid Mass Flow Rate' (kg/s) provided by the user. Linear interpolation is applied for Ug values between the defined points. The accuracy of these correlations is dependent on the range and conditions for which they were originally developed.
-* **Volume/Mass Fraction Distribution:** The 'Volume Fraction' and 'Mass Fraction' values displayed in the table and plot now represent the **normalized volume frequency distribution** as stated in the article. This means the sum of these fractions over the entire distribution range is 1. Consequently, the sum of 'Entrained Flow (kg/s)' for sampled points in the table will approximate the 'Total Entrained Liquid Mass Flow Rate' calculated in Step 6, with the full sum matching if all data points were included.
+* **Volume/Mass Fraction Distribution:** The 'Volume Fraction' and 'Mass Fraction' values displayed in the table and plot now represent the **normalized volume frequency distribution** as stated in the article. This means the sum of these fractions over the entire distribution range is 1. Consequently, the sum of 'Entrained Flow (kg/s)' for sampled points in the table will approximate the 'Total Entrained Liquid Flow Rate' calculated in Step 6, with the full sum matching if all data points were included.
 """)
