@@ -301,6 +301,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     momentum_unit_pdf = "Pa"
     micron_unit_label_pdf = "um"
     mass_flow_unit_pdf = "kg/s"
+    vol_flow_unit_pdf = "m^3/s" # New unit for PDF
 
     pdf.set_font('Arial', 'B', 10)
     pdf.chapter_body("Inputs Used for Calculation (Converted to FPS for internal calculation):")
@@ -312,7 +313,6 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"  Gas Density (rho_g): {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft^3")
     pdf.chapter_body(f"  Gas Viscosity (mu_g): {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec")
     pdf.chapter_body(f"  Liquid Surface Tension (sigma): {inputs['sigma_fps']:.4f} poundal/ft")
-    pdf.chapter_body(f"  Selected Inlet Device: {inputs['inlet_device']}")
     pdf.chapter_body(f"  Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit_pdf}") # New input
     pdf.ln(5)
 
@@ -372,6 +372,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"Liquid Loading (Wl): {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit_pdf}")
     pdf.chapter_body(f"Result: Entrainment Fraction (E) = {results['E_fraction']:.4f} (dimensionless)")
     pdf.chapter_body(f"Result: Total Entrained Liquid Mass Flow Rate = {results['Q_entrained_total_mass_flow_rate_si']:.4f} {mass_flow_unit_pdf}")
+    pdf.chapter_body(f"Result: Total Entrained Liquid Volume Flow Rate = {results['Q_entrained_total_volume_flow_rate_si']:.6f} {vol_flow_unit_pdf}") # New total volume flow
     pdf.ln(5)
 
 
@@ -389,7 +390,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.add_page() # Start a new page for the table
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
     if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
-        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Flow (kg/s)"] # Removed Mass Fraction
+        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Mass Flow (kg/s)", "Entrained Volume Flow (m^3/s)"] # Added Volume Flow
         # Use all points for the PDF table
         full_data = []
         for i in range(len(plot_data_for_table['dp_values_microns'])):
@@ -398,10 +399,11 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
                 f"{plot_data_for_table['volume_fraction'][i]:.4f}", # Use normalized for table
                 f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
                 f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}",
-                f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}" # New column
+                f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}",
+                f"{plot_data_for_table['entrained_volume_flow_rate_per_dp'][i]:.9f}" # Added Volume Flow
             ])
         
-        col_widths = [30, 30, 40, 40, 40] # Adjust column widths as needed for removed column
+        col_widths = [25, 25, 35, 35, 40, 45] # Adjusted column widths
         pdf.add_table(headers, full_data, col_widths)
     else:
         pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
@@ -538,7 +540,8 @@ if page == "Input Parameters":
             'volume_fraction': [],
             'cumulative_volume_undersize': [],
             'cumulative_volume_oversize': [],
-            'entrained_mass_flow_rate_per_dp': [] # New key for entrained flow rate per droplet size
+            'entrained_mass_flow_rate_per_dp': [], # New key for entrained flow rate per droplet size
+            'entrained_volume_flow_rate_per_dp': [] # New key for entrained volume flow rate per droplet size
         }
 
         # Convert all SI inputs to FPS for consistent calculation
@@ -624,6 +627,7 @@ if page == "Input Parameters":
         # --- New E and Entrained Flow Calculations ---
         Ug_si = st.session_state.inputs['V_g_input']
         Q_liquid_mass_flow_rate_input_si = st.session_state.inputs['Q_liquid_mass_flow_rate_input']
+        rho_l_input_si = st.session_state.inputs['rho_l_input'] # Get liquid density in SI for volume flow calculation
         
         # As per user's instruction, Wl for the empirical equation is directly the total liquid mass flow rate
         Wl_for_e_calc = Q_liquid_mass_flow_rate_input_si
@@ -631,16 +635,28 @@ if page == "Input Parameters":
         E_fraction = calculate_e_interpolated(Ug_si, Wl_for_e_calc)
         
         Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
+        
+        # Calculate total entrained liquid volume flow rate
+        Q_entrained_total_volume_flow_rate_si = 0.0
+        if rho_l_input_si > 0: # Avoid division by zero
+            Q_entrained_total_volume_flow_rate_si = Q_entrained_total_mass_flow_rate_si / rho_l_input_si
 
         results['Wl_for_e_calc'] = Wl_for_e_calc # Store the value used for E calculation
         results['E_fraction'] = E_fraction
         results['Q_entrained_total_mass_flow_rate_si'] = Q_entrained_total_mass_flow_rate_si
+        results['Q_entrained_total_volume_flow_rate_si'] = Q_entrained_total_volume_flow_rate_si # Store total volume flow
 
         # Calculate entrained mass flow rate per droplet size interval using the normalized volume fraction
         entrained_mass_flow_rate_per_dp = [
             fv_norm * Q_entrained_total_mass_flow_rate_si for fv_norm in normalized_volume_fraction
         ]
         plot_data['entrained_mass_flow_rate_per_dp'] = entrained_mass_flow_rate_per_dp
+
+        # Calculate entrained volume flow rate per droplet size interval
+        entrained_volume_flow_rate_per_dp = [
+            fv_norm * Q_entrained_total_volume_flow_rate_si for fv_norm in normalized_volume_fraction
+        ]
+        plot_data['entrained_volume_flow_rate_per_dp'] = entrained_volume_flow_rate_per_dp
 
 
         st.session_state.calculation_results = results
@@ -667,6 +683,7 @@ elif page == "Calculation Steps":
         momentum_unit = "Pa"
         micron_unit_label = "µm"
         mass_flow_unit = "kg/s"
+        vol_flow_unit = "m³/s" # New unit for Streamlit display
 
         # Display inputs used for calculation (original SI values)
         st.subheader("Inputs Used for Calculation (SI Units)")
@@ -746,6 +763,7 @@ elif page == "Calculation Steps":
         st.write(f"Liquid Loading (Wl): {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}")
         st.success(f"**Result:** Entrainment Fraction (E) = **{results['E_fraction']:.4f}** (dimensionless)")
         st.success(f"**Result:** Total Entrained Liquid Mass Flow Rate = **{results['Q_entrained_total_mass_flow_rate_si']:.4f} {mass_flow_unit}**")
+        st.success(f"**Result:** Total Entrained Liquid Volume Flow Rate = **{results['Q_entrained_total_volume_flow_rate_si']:.6f} {vol_flow_unit}**") # New total volume flow
         st.markdown("---")
 
         st.info("Step 7 (Generating Droplet Size Distribution Data and Entrained Flow per size) is performed internally to prepare data for the plot and table.")
@@ -763,6 +781,7 @@ elif page == "Droplet Distribution Results":
         # Define unit labels for plotting
         micron_unit_label = "µm" # Always SI for this version
         mass_flow_unit = "kg/s"
+        vol_flow_unit = "m³/s" # New unit for Streamlit display
 
         dp_values_microns = plot_data['dp_values_ft'] * FT_TO_MICRON
         # Use normalized_volume_fraction for plotting the distribution curve as per article's definition
@@ -770,6 +789,7 @@ elif page == "Droplet Distribution Results":
         cumulative_volume_undersize = plot_data['cumulative_volume_undersize']
         cumulative_volume_oversize = plot_data['cumulative_volume_oversize'] 
         entrained_mass_flow_rate_per_dp = plot_data['entrained_mass_flow_rate_per_dp'] # New data
+        entrained_volume_flow_rate_per_dp = plot_data['entrained_volume_flow_rate_per_dp'] # New data
 
         fig, ax1 = plt.subplots(figsize=(10, 6))
 
@@ -808,20 +828,24 @@ elif page == "Droplet Distribution Results":
                 "Volume Fraction": volume_fraction_for_plot,
                 "Cumulative Undersize": cumulative_volume_undersize,
                 "Cumulative Oversize": cumulative_volume_oversize,
-                f"Entrained Flow ({mass_flow_unit})": entrained_mass_flow_rate_per_dp
+                f"Entrained Mass Flow ({mass_flow_unit})": entrained_mass_flow_rate_per_dp,
+                f"Entrained Volume Flow ({vol_flow_unit})": entrained_volume_flow_rate_per_dp # New column
             })
             st.dataframe(full_df.style.format({
                 "Droplet Size (µm)": "{:.2f}",
                 "Volume Fraction": "{:.4f}",
                 "Cumulative Undersize": "{:.4f}",
                 "Cumulative Oversize": "{:.4f}",
-                f"Entrained Flow ({mass_flow_unit})": "{:.6f}"
+                f"Entrained Mass Flow ({mass_flow_unit})": "{:.6f}",
+                f"Entrained Volume Flow ({vol_flow_unit})": "{:.9f}" # Format for new column
             }))
             
             # Display sum check for verification
-            st.markdown(f"**Sum of Entrained Flow in Table:** {np.sum(entrained_mass_flow_rate_per_dp):.6f} {mass_flow_unit}")
+            st.markdown(f"**Sum of Entrained Mass Flow in Table:** {np.sum(entrained_mass_flow_rate_per_dp):.6f} {mass_flow_unit}")
             st.markdown(f"**Total Entrained Liquid Mass Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_mass_flow_rate_si']:.6f} {mass_flow_unit}")
-            st.info("Note: The sum of 'Entrained Flow' in the table should now precisely match the 'Total Entrained Liquid Mass Flow Rate' from Step 6, as the volume frequency distribution is normalized and all calculated points are displayed.")
+            st.markdown(f"**Sum of Entrained Volume Flow in Table:** {np.sum(entrained_volume_flow_rate_per_dp):.9f} {vol_flow_unit}") # New sum check
+            st.markdown(f"**Total Entrained Liquid Volume Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_volume_flow_rate_si']:.9f} {vol_flow_unit}") # New sum check
+            st.info("Note: The sum of 'Entrained Flow' in the table should now precisely match the 'Total Entrained Liquid Flow Rate' from Step 6, as the volume frequency distribution is normalized and all calculated points are displayed.")
 
         else:
             st.info("No data available to display in the table. Please check your input parameters.")
@@ -837,7 +861,8 @@ elif page == "Droplet Distribution Results":
             'volume_fraction': volume_fraction_for_plot, # Pass normalized for PDF table
             'cumulative_volume_undersize': cumulative_volume_undersize,
             'cumulative_volume_oversize': cumulative_volume_oversize,
-            'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp
+            'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp,
+            'entrained_volume_flow_rate_per_dp': entrained_volume_flow_rate_per_dp # Pass new data
         }
 
         st.download_button(
