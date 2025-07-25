@@ -75,8 +75,9 @@ def get_shift_factor(inlet_device, rho_v_squared):
         st.warning(f"Inlet momentum ({rho_v_squared:.2f} lb/ft-sec^2) is below the minimum defined for '{inlet_device}' ({x_values.min():.2f} lb/ft-sec^2). Using minimum shift factor: {y_values.min():.3f}.")
         return y_values.min() # Use the smallest shift factor if below range
     elif rho_v_squared > x_values.max():
-        st.warning(f"Inlet momentum ({rho_v_squared:.2f} lb/ft-sec^2) is above the maximum defined for '{inlet_device}' ({x_values.max():.2f} lb/ft-sec^2). Using maximum shift factor: {y_values.max():.3f}.")
-        return y_values.max() # Use the largest shift factor if above range
+        # Corrected: Use the minimum shift factor for values above the maximum defined range
+        st.warning(f"Inlet momentum ({rho_v_squared:.2f} lb/ft-sec^2) is above the maximum defined for '{inlet_device}' ({x_values.max():.2f} lb/ft-sec^2). Using minimum shift factor: {y_values.min():.3f}.")
+        return y_values.min() # Use the smallest shift factor if above range
 
     # Perform linear interpolation
     shift_factor = np.interp(rho_v_squared, x_values, y_values)
