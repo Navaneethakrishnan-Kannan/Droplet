@@ -389,20 +389,21 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.add_page() # Start a new page for the table
     pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
     if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
-        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Flow (kg/s)"]
+        headers = ["Droplet Size (um)", "Volume Fraction", "Mass Fraction", "Cumulative Undersize", "Cumulative Oversize", "Entrained Flow (kg/s)"]
         # Sample 25 data points
         indices = np.linspace(0, len(plot_data_for_table['dp_values_microns']) - 1, 25, dtype=int)
         sampled_data = []
         for i in indices:
             sampled_data.append([
                 f"{plot_data_for_table['dp_values_microns'][i]:.2f}",
-                f"{plot_data_for_table['volume_fraction'][i]:.4f}",
+                f"{plot_data_for_table['normalized_volume_fraction'][i]:.4f}", # Use normalized for table
+                f"{plot_data_for_table['normalized_volume_fraction'][i]:.4f}", # Mass Fraction is same as normalized volume fraction
                 f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
                 f"{plot_data_for_table['cumulative_volume_oversize'][i]:.4f}",
                 f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}" # New column
             ])
         
-        col_widths = [35, 35, 40, 40, 45] # Adjust column widths as needed
+        col_widths = [30, 30, 30, 40, 40, 40] # Adjust column widths as needed
         pdf.add_table(headers, sampled_data, col_widths)
     else:
         pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
@@ -537,6 +538,7 @@ if page == "Input Parameters":
         plot_data = {
             'dp_values_ft': [],
             'volume_fraction': [],
+            'normalized_volume_fraction': [], # New key for normalized volume/mass fraction
             'cumulative_volume_undersize': [],
             'cumulative_volume_oversize': [],
             'entrained_mass_flow_rate_per_dp': [] # New key for entrained flow rate per droplet size
@@ -581,14 +583,13 @@ if page == "Input Parameters":
         d_max_fps = A_DISTRIBUTION * dv50_adjusted_fps
         results['d_max_fps'] = d_max_fps
 
-        # Step 6: Generate Volume Fraction and Cumulative Volume Fraction for a range of droplet sizes
+        # Step 6: Generate Volume Fraction (PDF values initially) for a range of droplet sizes
         dp_min_calc_fps = dv50_adjusted_fps * 0.01
         dp_max_calc_fps = d_max_fps * 0.999
 
         dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 500)
         
-        volume_fraction = []
-        cumulative_volume_undersize = []
+        volume_fraction_pdf_values = [] # Store PDF values initially
 
         for dp in dp_values_ft:
             # Ensure dp is not equal to d_max_fps to avoid division by zero in log argument
@@ -603,21 +604,25 @@ if page == "Input Parameters":
             else:
                 fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi * dp * (d_max_fps - dp)))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
             
-            volume_fraction.append(fv_dp)
-            
-            # For cumulative, erf(inf) is 1, erf(-inf) is -1
-            if z_val == np.inf:
-                v_under = 1.0
-            elif z_val == -np.inf:
-                v_under = 0.0
-            else:
-                v_under = 1 - 0.5 * (1 - erf(DELTA_DISTRIBUTION * z_val))
-            cumulative_volume_undersize.append(v_under)
+            volume_fraction_pdf_values.append(fv_dp)
         
+        # Normalize the volume fraction PDF values to get a distribution that sums to 1
+        volume_fraction_pdf_values_array = np.array(volume_fraction_pdf_values)
+        sum_of_pdf_values = np.sum(volume_fraction_pdf_values_array)
+        
+        normalized_volume_fraction = np.zeros_like(volume_fraction_pdf_values_array)
+        if sum_of_pdf_values > 1e-9: # Avoid division by zero if all PDF values are tiny
+            normalized_volume_fraction = volume_fraction_pdf_values_array / sum_of_pdf_values
+
+        # Recalculate cumulative values based on normalized volume fraction
+        cumulative_volume_undersize = np.cumsum(normalized_volume_fraction)
+        cumulative_volume_oversize = 1 - cumulative_volume_undersize
+
         plot_data['dp_values_ft'] = dp_values_ft
-        plot_data['volume_fraction'] = volume_fraction
+        plot_data['volume_fraction'] = volume_fraction_pdf_values # Keep original PDF values for plot's right axis if desired, or change to normalized
+        plot_data['normalized_volume_fraction'] = normalized_volume_fraction # Store normalized for table and consistent plotting
         plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
-        plot_data['cumulative_volume_oversize'] = [1 - v for v in cumulative_volume_undersize] # Add this for the table
+        plot_data['cumulative_volume_oversize'] = cumulative_volume_oversize # This is now directly 1 - cumulative_undersize
 
         # --- New E and Entrained Flow Calculations ---
         Ug_si = st.session_state.inputs['V_g_input']
@@ -630,14 +635,13 @@ if page == "Input Parameters":
         
         Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
 
-        # results['Wl_dimensionless'] = Wl_dimensionless # Removed as per user's instruction
         results['Wl_for_e_calc'] = Wl_for_e_calc # Store the value used for E calculation
         results['E_fraction'] = E_fraction
         results['Q_entrained_total_mass_flow_rate_si'] = Q_entrained_total_mass_flow_rate_si
 
-        # Calculate entrained mass flow rate per droplet size interval
+        # Calculate entrained mass flow rate per droplet size interval using normalized volume fraction
         entrained_mass_flow_rate_per_dp = [
-            fv * Q_entrained_total_mass_flow_rate_si for fv in volume_fraction
+            fv_norm * Q_entrained_total_mass_flow_rate_si for fv_norm in normalized_volume_fraction
         ]
         plot_data['entrained_mass_flow_rate_per_dp'] = entrained_mass_flow_rate_per_dp
 
@@ -742,7 +746,7 @@ elif page == "Calculation Steps":
         # Step 6: Entrainment Fraction (E) Calculation
         st.markdown("#### Step 6: Calculate Entrainment Fraction (E)")
         st.write(f"Gas Velocity (Ug): {st.session_state.inputs['V_g_input']:.2f} {vel_unit}")
-        st.write(f"Liquid Loading (Wl): {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit} (as per user's instruction)")
+        st.write(f"Liquid Loading (Wl): {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}")
         st.success(f"**Result:** Entrainment Fraction (E) = **{results['E_fraction']:.4f}** (dimensionless)")
         st.success(f"**Result:** Total Entrained Liquid Mass Flow Rate = **{results['Q_entrained_total_mass_flow_rate_si']:.4f} {mass_flow_unit}**")
         st.markdown("---")
@@ -764,7 +768,8 @@ elif page == "Droplet Distribution Results":
         mass_flow_unit = "kg/s"
 
         dp_values_microns = plot_data['dp_values_ft'] * FT_TO_MICRON
-        volume_fraction = plot_data['volume_fraction']
+        # Use normalized_volume_fraction for plotting the distribution curve
+        normalized_volume_fraction_for_plot = plot_data['normalized_volume_fraction']
         cumulative_volume_undersize = plot_data['cumulative_volume_undersize']
         cumulative_volume_oversize = plot_data['cumulative_volume_oversize'] 
         entrained_mass_flow_rate_per_dp = plot_data['entrained_mass_flow_rate_per_dp'] # New data
@@ -776,16 +781,18 @@ elif page == "Droplet Distribution Results":
         ax1.set_xlabel(f'Droplet Size ({micron_unit_label})', fontsize=12)
         ax1.set_ylabel('Cumulative Volume Fraction', color='black', fontsize=12)
         ax1.tick_params(axis='y', labelcolor='black')
-        ax1.set_ylim(0, 1.4)
+        ax1.set_ylim(0, 1.05) # Adjusted y-limit for cumulative fractions
         ax1.set_xlim(0, max(dp_values_microns) * 1.1 if dp_values_microns.size > 0 else 1000)
 
         ax2 = ax1.twinx()
-        ax2.plot(dp_values_microns, volume_fraction, 'o-', label='Volume Fraction', markersize=2, color='#2ca02c')
-        ax2.set_ylabel('Volume Fraction', color='black', fontsize=12)
+        # Plot normalized volume fraction on the right axis
+        ax2.plot(dp_values_microns, normalized_volume_fraction_for_plot, 'o-', label='Volume/Mass Fraction', markersize=2, color='#2ca02c')
+        ax2.set_ylabel('Volume/Mass Fraction', color='black', fontsize=12)
         ax2.tick_params(axis='y', labelcolor='black')
         
-        max_fv = max(volume_fraction) if volume_fraction else 0.1
-        ax2.set_ylim(0, max_fv * 1.2)
+        # Adjust y-limit for normalized volume/mass fraction (it now sums to 1)
+        max_norm_fv = max(normalized_volume_fraction_for_plot) if normalized_volume_fraction_for_plot.size > 0 else 0.1
+        ax2.set_ylim(0, max_norm_fv * 1.2)
 
         lines, labels = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
@@ -802,7 +809,8 @@ elif page == "Droplet Distribution Results":
             indices = np.linspace(0, len(dp_values_microns) - 1, 25, dtype=int)
             sampled_df = pd.DataFrame({
                 "Droplet Size (µm)": [dp_values_microns[i] for i in indices],
-                "Volume Fraction": [volume_fraction[i] for i in indices],
+                "Volume Fraction": [normalized_volume_fraction_for_plot[i] for i in indices],
+                "Mass Fraction": [normalized_volume_fraction_for_plot[i] for i in indices], # Mass Fraction is same as normalized volume fraction
                 "Cumulative Undersize": [cumulative_volume_undersize[i] for i in indices],
                 "Cumulative Oversize": [cumulative_volume_oversize[i] for i in indices],
                 f"Entrained Flow ({mass_flow_unit})": [entrained_mass_flow_rate_per_dp[i] for i in indices] # New column
@@ -810,10 +818,16 @@ elif page == "Droplet Distribution Results":
             st.dataframe(sampled_df.style.format({
                 "Droplet Size (µm)": "{:.2f}",
                 "Volume Fraction": "{:.4f}",
+                "Mass Fraction": "{:.4f}",
                 "Cumulative Undersize": "{:.4f}",
                 "Cumulative Oversize": "{:.4f}",
                 f"Entrained Flow ({mass_flow_unit})": "{:.6f}" # Format for new column
             }))
+            
+            # Display sum check for verification
+            st.markdown(f"**Sum of Entrained Flow in Table:** {np.sum([entrained_mass_flow_rate_per_dp[i] for i in indices]):.6f} {mass_flow_unit}")
+            st.markdown(f"**Total Entrained Liquid Mass Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_mass_flow_rate_si']:.6f} {mass_flow_unit}")
+
         else:
             st.info("No data available to display in the table. Please check your input parameters.")
 
@@ -825,7 +839,7 @@ elif page == "Droplet Distribution Results":
         # Prepare data for PDF table
         plot_data_for_pdf_table = {
             'dp_values_microns': dp_values_microns,
-            'volume_fraction': volume_fraction,
+            'normalized_volume_fraction': normalized_volume_fraction_for_plot, # Pass normalized for PDF table
             'cumulative_volume_undersize': cumulative_volume_undersize,
             'cumulative_volume_oversize': cumulative_volume_oversize,
             'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp # Pass new data
