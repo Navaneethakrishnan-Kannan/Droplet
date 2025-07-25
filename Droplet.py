@@ -586,7 +586,7 @@ if page == "Input Parameters":
         dp_max_calc_fps = d_max_fps * 0.999
 
         # Changed number of points from 500 to 200 as per user request
-        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 200)
+        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 10)
         
         volume_fraction_pdf_values = [] # Store PDF values initially
 
