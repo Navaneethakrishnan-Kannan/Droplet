@@ -585,8 +585,8 @@ if page == "Input Parameters":
         dp_min_calc_fps = dv50_adjusted_fps * 0.01
         dp_max_calc_fps = d_max_fps * 0.999
 
-        # Changed number of points from 500 to 200 as per user request
-        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 10)
+        # Changed number of points from 200 to 100 as per user request
+        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 100)
         
         volume_fraction_pdf_values = [] # Store PDF values initially
 
@@ -801,9 +801,9 @@ elif page == "Droplet Distribution Results":
         st.pyplot(fig)
 
         # --- Volume Fraction Data Table for Streamlit App ---
-        st.subheader("Volume Fraction Data Table (All 200 Points)")
+        st.subheader("Volume Fraction Data Table (All 100 Points)")
         if dp_values_microns.size > 0:
-            # Display all 200 data points as requested
+            # Display all 100 data points as requested
             full_df = pd.DataFrame({
                 "Droplet Size (µm)": dp_values_microns,
                 "Volume Fraction": volume_fraction_for_plot,
@@ -834,7 +834,7 @@ elif page == "Droplet Distribution Results":
         fig.savefig(buf, format="png", dpi=300)
         buf.seek(0) # Rewind to the beginning of the buffer
 
-        # Prepare data for PDF table (all 200 points)
+        # Prepare data for PDF table (all 100 points)
         plot_data_for_pdf_table = {
             'dp_values_microns': dp_values_microns,
             'volume_fraction': volume_fraction_for_plot, # Pass normalized for PDF table
