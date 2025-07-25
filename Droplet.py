@@ -282,7 +282,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     pdf.chapter_body(f"Gas Density (rho_g): {inputs['rho_g_input']:.5f} kg/m^3")
     pdf.chapter_body(f"Gas Viscosity (mu_g): {inputs['mu_g_input']:.9f} Pa.s")
     
-    sigma_display_val = from_fps(inputs['sigma_fps'], "surface_tension")
+    sigma_display_val = inputs['sigma_custom'] # Directly use sigma_custom for display
     pdf.chapter_body(f"Liquid Surface Tension (sigma): {sigma_display_val:.3f} N/m")
     pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
     pdf.chapter_body(f"Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} kg/s") # New input
@@ -627,13 +627,13 @@ if 'inputs' not in st.session_state:
         'V_g_input': 15.24, # m/s (50 ft/sec)
         'rho_g_input': 1.6018, # kg/m3 (0.1 lb/ft3)
         'mu_g_input': 0.00001488, # Pa.s (0.00001 lb/ft-sec)
-        'surface_tension_option': "Water/gas",
-        'sigma_custom': 0.03, # N/m (30 dyne/cm)
+        'sigma_custom': 0.012, # Default N/m (from user request)
         'inlet_device': "No inlet device",
         'Q_liquid_mass_flow_rate_input': 0.1, # New input: kg/s (example value)
         'num_points_distribution': 20, # Default number of points
     }
-    st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE_DYNE_CM["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
+    # Initialize sigma_fps based on the new default sigma_custom
+    st.session_state.inputs['sigma_fps'] = to_fps(st.session_state.inputs['sigma_custom'], "surface_tension")
 
 if 'calculation_results' not in st.session_state:
     st.session_state.calculation_results = None
@@ -686,32 +686,25 @@ if page == "Input Parameters":
 
     with col_st:
         st.subheader("Liquid Surface Tension")
-        # Convert SURFACE_TENSION_TABLE_DYNE_CM values to N/m for display in selectbox
-        st_options_nm = {k: v * DYNE_CM_TO_NM for k, v in SURFACE_TENSION_TABLE_DYNE_CM.items()}
         
-        # Determine current index for selectbox
-        current_st_option_index = list(SURFACE_TENSION_TABLE_DYNE_CM.keys()).index(st.session_state.inputs['surface_tension_option']) if st.session_state.inputs['surface_tension_option'] in SURFACE_TENSION_TABLE_DYNE_CM else len(SURFACE_TENSION_TABLE_DYNE_CM.keys())
-        
-        st.session_state.inputs['surface_tension_option'] = st.selectbox(
-            "Select Fluid System for Surface Tension",
-            options=list(SURFACE_TENSION_TABLE_DYNE_CM.keys()) + ["Custom"],
-            index=current_st_option_index,
-            key='surface_tension_option_select',
-            format_func=lambda x: f"{x} ({st_options_nm[x]:.3f} N/m)" if x in st_options_nm else x, # Show N/m in options
-            help="Choose a typical value or enter a custom one."
-        )
+        # Construct the tooltip string from SURFACE_TENSION_TABLE_DYNE_CM
+        tooltip_text = "Typical Liquid Surface Tension Values (N/m):\n"
+        for fluid, value_dyne_cm in SURFACE_TENSION_TABLE_DYNE_CM.items():
+            value_nm = value_dyne_cm * DYNE_CM_TO_NM
+            tooltip_text += f"- {fluid}: {value_nm:.3f} N/m\n"
 
-        sigma_input_val_si = 0.0
-        if st.session_state.inputs['surface_tension_option'] == "Custom":
-            st.session_state.inputs['sigma_custom'] = st.number_input(f"Custom Liquid Surface Tension ({surf_tens_input_unit})", min_value=0.0001, value=st.session_state.inputs['sigma_custom'], format="%.4f", key='sigma_custom_input')
-            sigma_input_val_si = st.session_state.inputs['sigma_custom']
-        else:
-            sigma_input_val_si = SURFACE_TENSION_TABLE_DYNE_CM[st.session_state.inputs['surface_tension_option']] * DYNE_CM_TO_NM
+        st.session_state.inputs['sigma_custom'] = st.number_input(
+            f"Liquid Surface Tension ({surf_tens_input_unit})",
+            min_value=0.0001,
+            value=st.session_state.inputs['sigma_custom'],
+            format="%.4f",
+            key='sigma_custom_input',
+            help=tooltip_text # Use the constructed tooltip text here
+        )
+        # Update sigma_fps based on the new sigma_custom value
+        st.session_state.inputs['sigma_fps'] = to_fps(st.session_state.inputs['sigma_custom'], "surface_tension")
         
-        # Store sigma in FPS for internal calculation
-        st.session_state.inputs['sigma_fps'] = to_fps(sigma_input_val_si, "surface_tension")
-        
-        st.info(f"**Selected Liquid Surface Tension:** {sigma_input_val_si:.3f} {surf_tens_input_unit}")
+        st.info(f"**Current Liquid Surface Tension:** {st.session_state.inputs['sigma_custom']:.3f} {surf_tens_input_unit}")
 
 
     with col_id:
@@ -769,7 +762,7 @@ elif page == "Calculation Steps":
         st.write(f"Gas Density (ρg): {st.session_state.inputs['rho_g_input']:.5f} {dens_unit}")
         st.write(f"Gas Viscosity (μg): {st.session_state.inputs['mu_g_input']:.9f} {visc_unit}")
         # Display selected surface tension in SI units
-        sigma_display_val = from_fps(st.session_state.inputs['sigma_fps'], "surface_tension")
+        sigma_display_val = st.session_state.inputs['sigma_custom'] # Use sigma_custom for display
         st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
         st.write(f"Selected Inlet Device: {st.session_state.inputs['inlet_device']}")
         st.write(f"Total Liquid Mass Flow Rate: {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}") # New input
