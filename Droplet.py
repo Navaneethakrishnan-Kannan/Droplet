@@ -604,7 +604,7 @@ def _perform_main_calculations(inputs):
     
     E_fraction = calculate_e_interpolated(Ug_si, Wl_for_e_calc)
         
-    Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_si
+    Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
     
     Q_entrained_total_volume_flow_rate_si = 0.0
     if rho_l_input_si > 0:
@@ -876,25 +876,35 @@ elif page == "Droplet Distribution Results":
             results = st.session_state.calculation_results
             num_points = st.session_state.inputs['num_points_distribution']
             
-            # Generate data for original distribution
-            st.session_state.plot_data_original = _generate_distribution_data(
-                results['dv50_original_fps'],
-                results['d_max_original_fps'],
-                num_points,
-                results['E_fraction'],
-                st.session_state.inputs['Q_liquid_mass_flow_rate_input'],
-                st.session_state.inputs['rho_l_input']
-            )
+            # Ensure required inputs for distribution generation are available
+            if 'Q_liquid_mass_flow_rate_input' in st.session_state.inputs and \
+               st.session_state.inputs['Q_liquid_mass_flow_rate_input'] is not None and \
+               'rho_l_input' in st.session_state.inputs and \
+               st.session_state.inputs['rho_l_input'] is not None:
 
-            # Generate data for adjusted distribution
-            st.session_state.plot_data_adjusted = _generate_distribution_data(
-                results['dv50_adjusted_fps'],
-                results['d_max_adjusted_fps'],
-                num_points,
-                results['E_fraction'],
-                st.session_state.inputs['Q_liquid_mass_flow_rate_input'],
-                st.session_state.inputs['rho_l_input']
-            )
+                # Generate data for original distribution
+                st.session_state.plot_data_original = _generate_distribution_data(
+                    results['dv50_original_fps'],
+                    results['d_max_original_fps'],
+                    num_points,
+                    results['E_fraction'],
+                    st.session_state.inputs['Q_liquid_mass_flow_rate_input'],
+                    st.session_state.inputs['rho_l_input']
+                )
+
+                # Generate data for adjusted distribution
+                st.session_state.plot_data_adjusted = _generate_distribution_data(
+                    results['dv50_adjusted_fps'],
+                    results['d_max_adjusted_fps'],
+                    num_points,
+                    results['E_fraction'],
+                    st.session_state.inputs['Q_liquid_mass_flow_rate_input'],
+                    st.session_state.inputs['rho_l_input']
+                )
+            else:
+                st.warning("Required liquid flow rate or density inputs are missing in session state. Please check 'Input Parameters' page.")
+                st.session_state.plot_data_original = None
+                st.session_state.plot_data_adjusted = None
 
         except Exception as e:
             st.error(f"An error occurred during plot data calculation: {e}")
