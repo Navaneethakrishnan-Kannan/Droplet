@@ -238,7 +238,12 @@ class PDF(FPDF):
         self.multi_cell(0, 6, body)
         self.ln()
         
-    def add_table(self, headers, data, col_widths):
+    def add_table(self, headers, data, col_widths, title=None):
+        if title:
+            self.set_font('Arial', 'B', 10)
+            self.cell(0, 7, title, 0, 1, 'L')
+            self.ln(2)
+
         # Set font for table headers
         self.set_font('Arial', 'B', 9)
         for i, header in enumerate(headers):
@@ -254,7 +259,7 @@ class PDF(FPDF):
         self.ln(5)
 
 
-def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table):
+def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_buffer_adjusted, plot_data_original, plot_data_adjusted):
     pdf = PDF()
     pdf.alias_nb_pages()
     pdf.add_page()
@@ -281,6 +286,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"Liquid Surface Tension (sigma): {sigma_display_val:.3f} N/m")
     pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
     pdf.chapter_body(f"Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} kg/s") # New input
+    pdf.chapter_body(f"Number of Points for Distribution: {inputs['num_points_distribution']}") # New input
     pdf.ln(5)
 
     # --- Calculation Steps ---
@@ -308,7 +314,6 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"  Gas Viscosity (mu_g): {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec")
     pdf.chapter_body(f"  Liquid Surface Tension (sigma): {inputs['sigma_fps']:.4f} poundal/ft")
     pdf.chapter_body(f"  Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit_pdf}") # New input
-    pdf.chapter_body(f"  Number of Points for Distribution: {inputs['num_points_distribution']}") # New input
     pdf.ln(5)
 
     # Step 1
@@ -371,36 +376,66 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.ln(5)
 
 
-    # --- Droplet Distribution Plot ---
+    # --- Droplet Distribution Plots ---
     pdf.add_page()
     pdf.chapter_title('3. Droplet Distribution Results')
-    pdf.chapter_body("The following graph shows the calculated entrainment droplet size distribution:")
     
-    # Add the plot image
-    if plot_image_buffer:
-        pdf.image(plot_image_buffer, x=10, y=pdf.get_y(), w=pdf.w - 20)
+    pdf.chapter_body("The following graphs show the calculated entrainment droplet size distribution:")
+
+    # Original Distribution Plot
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(0, 7, '3.1. Distribution Before Inlet Device', 0, 1, 'L')
+    pdf.ln(2)
+    if plot_image_buffer_original:
+        pdf.image(plot_image_buffer_original, x=10, y=pdf.get_y(), w=pdf.w - 20)
     pdf.ln(5)
 
-    # --- Volume Fraction Data Table ---
-    pdf.add_page() # Start a new page for the table
-    pdf.chapter_title('4. Volume Fraction Data Table (Sampled)')
-    if plot_data_for_table and 'dp_values_microns' in plot_data_for_table and len(plot_data_for_table['dp_values_microns']) > 0:
-        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Entrained Mass Flow (kg/s)", "Entrained Volume Flow (m^3/s)"] # Removed Cumulative Oversize
-        # Use all points for the PDF table
-        full_data = []
-        for i in range(len(plot_data_for_table['dp_values_microns'])):
-            full_data.append([
-                f"{plot_data_for_table['dp_values_microns'][i]:.2f}",
-                f"{plot_data_for_table['volume_fraction'][i]:.4f}", # Use normalized for table
-                f"{plot_data_for_table['cumulative_volume_undersize'][i]:.4f}",
-                f"{plot_data_for_table['entrained_mass_flow_rate_per_dp'][i]:.6f}",
-                f"{plot_data_for_table['entrained_volume_flow_rate_per_dp'][i]:.9f}" # Added Volume Flow
-            ])
+    # Adjusted Distribution Plot
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(0, 7, '3.2. Distribution After Inlet Device (Shift Factor Applied)', 0, 1, 'L')
+    pdf.ln(2)
+    if plot_image_buffer_adjusted:
+        pdf.image(plot_image_buffer_adjusted, x=10, y=pdf.get_y(), w=pdf.w - 20)
+    pdf.ln(5)
+
+
+    # --- Volume Fraction Data Tables ---
+    pdf.add_page() # Start a new page for the tables
+    pdf.chapter_title('4. Volume Fraction Data Tables (Sampled)')
+
+    if plot_data_original and 'dp_values_microns' in plot_data_original and len(plot_data_original['dp_values_microns']) > 0:
+        headers = ["Droplet Size (um)", "Volume Fraction", "Cumulative Undersize", "Entrained Mass Flow (kg/s)", "Entrained Volume Flow (m^3/s)"]
         
-        col_widths = [25, 25, 35, 40, 45] # Adjusted column widths
-        pdf.add_table(headers, full_data, col_widths)
+        # Original Data Table
+        full_data_original = []
+        for i in range(len(plot_data_original['dp_values_microns'])):
+            full_data_original.append([
+                f"{plot_data_original['dp_values_microns'][i]:.2f}",
+                f"{plot_data_original['volume_fraction'][i]:.4f}",
+                f"{plot_data_original['cumulative_volume_undersize'][i]:.4f}",
+                f"{plot_data_original['entrained_mass_flow_rate_per_dp'][i]:.6f}",
+                f"{plot_data_original['entrained_volume_flow_rate_per_dp'][i]:.9f}"
+            ])
+        col_widths = [25, 25, 35, 40, 45]
+        pdf.add_table(headers, full_data_original, col_widths, title='4.1. Distribution Before Inlet Device')
     else:
-        pdf.chapter_body("No data available to display in the table. Please check your input parameters.")
+        pdf.chapter_body("No data available for original distribution table. Please check your input parameters.")
+    
+    if plot_data_adjusted and 'dp_values_microns' in plot_data_adjusted and len(plot_data_adjusted['dp_values_microns']) > 0:
+        # Adjusted Data Table
+        full_data_adjusted = []
+        for i in range(len(plot_data_adjusted['dp_values_microns'])):
+            full_data_adjusted.append([
+                f"{plot_data_adjusted['dp_values_microns'][i]:.2f}",
+                f"{plot_data_adjusted['volume_fraction'][i]:.4f}",
+                f"{plot_data_adjusted['cumulative_volume_undersize'][i]:.4f}",
+                f"{plot_data_adjusted['entrained_mass_flow_rate_per_dp'][i]:.6f}",
+                f"{plot_data_adjusted['entrained_volume_flow_rate_per_dp'][i]:.9f}"
+            ])
+        col_widths = [25, 25, 35, 40, 45]
+        pdf.add_table(headers, full_data_adjusted, col_widths, title='4.2. Distribution After Inlet Device (Shift Factor Applied)')
+    else:
+        pdf.chapter_body("No data available for adjusted distribution table. Please check your input parameters.")
 
 
     return bytes(pdf.output(dest='S')) # Return PDF as bytes directly
@@ -416,10 +451,12 @@ based on the principles and correlations discussed in the article "Quantifying S
 All inputs and outputs are in **SI Units**.
 """)
 
-# --- Function to perform all calculations ---
-def _calculate_all_data(inputs, num_points_override=None):
-    """Performs all calculations and returns results and plot_data."""
-    results = {}
+# --- Helper function to generate distribution data for a given dv50 and d_max ---
+def _generate_distribution_data(dv50_value_fps, d_max_value_fps, num_points, E_fraction, Q_liquid_mass_flow_rate_si, rho_l_input_si):
+    """
+    Generates particle size distribution data (volume fraction, cumulative, entrained flow)
+    for a given dv50, d_max, and other flow parameters.
+    """
     plot_data = {
         'dp_values_ft': [],
         'volume_fraction': [],
@@ -428,6 +465,79 @@ def _calculate_all_data(inputs, num_points_override=None):
         'entrained_mass_flow_rate_per_dp': [],
         'entrained_volume_flow_rate_per_dp': []
     }
+
+    dp_min_calc_fps = dv50_value_fps * 0.01
+    dp_max_calc_fps = d_max_value_fps * 0.999
+
+    if dp_min_calc_fps >= dp_max_calc_fps:
+        st.warning("Calculated min droplet size is greater than or equal to max droplet size. Distribution cannot be generated.")
+        return plot_data # Return empty data
+
+    dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, num_points)
+    
+    volume_fraction_pdf_values = []
+
+    for dp in dp_values_ft:
+        if dp >= d_max_value_fps:
+            z_val = np.inf
+        else:
+            # Ensure the argument to log is positive and finite
+            log_arg = (A_DISTRIBUTION * dp) / (d_max_value_fps - dp)
+            if log_arg <= 0: # Handle cases where dp is too small or d_max_value_fps - dp is too small
+                z_val = -np.inf
+            else:
+                z_val = np.log(log_arg)
+        
+        # Handle potential division by zero for fv_dp if dp or (d_max_value_fps - dp) is zero
+        if dp == 0 or (d_max_value_fps - dp) == 0:
+            fv_dp = 0
+        else:
+            denominator = np.sqrt(np.pi * dp * (d_max_value_fps - dp))
+            if denominator == 0:
+                fv_dp = 0
+            else:
+                fv_dp = ((DELTA_DISTRIBUTION * d_max_value_fps) / denominator) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
+        
+        volume_fraction_pdf_values.append(fv_dp)
+    
+    volume_fraction_pdf_values_array = np.array(volume_fraction_pdf_values)
+    sum_of_pdf_values = np.sum(volume_fraction_pdf_values_array)
+    
+    normalized_volume_fraction = np.zeros_like(volume_fraction_pdf_values_array)
+    if sum_of_pdf_values > 1e-9:
+        normalized_volume_fraction = volume_fraction_pdf_values_array / sum_of_pdf_values
+
+    cumulative_volume_undersize = np.cumsum(normalized_volume_fraction)
+    cumulative_volume_oversize = 1 - cumulative_volume_undersize
+
+    plot_data['dp_values_ft'] = dp_values_ft
+    plot_data['volume_fraction'] = normalized_volume_fraction
+    plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
+    plot_data['cumulative_volume_oversize'] = cumulative_volume_oversize
+
+    # Calculate total entrained liquid mass and volume flow rates
+    Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_si
+    Q_entrained_total_volume_flow_rate_si = 0.0
+    if rho_l_input_si > 0:
+        Q_entrained_total_volume_flow_rate_si = Q_entrained_total_mass_flow_rate_si / rho_l_input_si
+
+    # Calculate entrained mass flow rate per droplet size interval using the normalized volume fraction
+    plot_data['entrained_mass_flow_rate_per_dp'] = [
+        fv_norm * Q_entrained_total_mass_flow_rate_si for fv_norm in normalized_volume_fraction
+    ]
+
+    # Calculate entrained volume flow rate per droplet size interval
+    plot_data['entrained_volume_flow_rate_per_dp'] = [
+        fv_norm * Q_entrained_total_volume_flow_rate_si for fv_norm in normalized_volume_fraction
+    ]
+
+    return plot_data
+
+
+# --- Function to perform all main calculations ---
+def _perform_main_calculations(inputs):
+    """Performs all scalar calculations and returns results dictionary."""
+    results = {}
 
     # Convert all SI inputs to FPS for consistent calculation
     D = to_fps(inputs['D_input'], "length")
@@ -449,6 +559,11 @@ def _calculate_all_data(inputs, num_points_override=None):
     
     dv50_original_fps = 0.01 * (sigma / (rho_g * V_g**2)) * (Re_g**(2/3)) * ((rho_g / rho_l)**(-1/3)) * ((mu_g / mu_l)**(2/3))
     results['dv50_original_fps'] = dv50_original_fps
+    
+    # Calculate d_max for the original distribution
+    d_max_original_fps = A_DISTRIBUTION * dv50_original_fps
+    results['d_max_original_fps'] = d_max_original_fps
+
 
     # Step 3: Determine Inlet Momentum (rho_g V_g^2)
     rho_v_squared_fps = rho_g * V_g**2
@@ -460,49 +575,11 @@ def _calculate_all_data(inputs, num_points_override=None):
     results['shift_factor'] = shift_factor
     results['dv50_adjusted_fps'] = dv50_adjusted_fps
 
-    # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
-    d_max_fps = A_DISTRIBUTION * dv50_adjusted_fps
-    results['d_max_fps'] = d_max_fps
+    # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution for adjusted dv50
+    d_max_adjusted_fps = A_DISTRIBUTION * dv50_adjusted_fps
+    results['d_max_adjusted_fps'] = d_max_adjusted_fps
 
-    # Step 6: Generate Volume Fraction (PDF values) and Cumulative Volume Fraction for a range of droplet sizes
-    dp_min_calc_fps = dv50_adjusted_fps * 0.01
-    dp_max_calc_fps = d_max_fps * 0.999
-
-    # Use the override if provided, otherwise use the value from inputs
-    num_points = num_points_override if num_points_override is not None else inputs['num_points_distribution']
-    dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, num_points)
-    
-    volume_fraction_pdf_values = []
-
-    for dp in dp_values_ft:
-        if dp >= d_max_fps:
-            z_val = np.inf
-        else:
-            z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
-        
-        if dp == 0 or (d_max_fps - dp) == 0:
-            fv_dp = 0
-        else:
-            fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi * dp * (d_max_fps - dp)))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
-        
-        volume_fraction_pdf_values.append(fv_dp)
-    
-    volume_fraction_pdf_values_array = np.array(volume_fraction_pdf_values)
-    sum_of_pdf_values = np.sum(volume_fraction_pdf_values_array)
-    
-    normalized_volume_fraction = np.zeros_like(volume_fraction_pdf_values_array)
-    if sum_of_pdf_values > 1e-9:
-        normalized_volume_fraction = volume_fraction_pdf_values_array / sum_of_pdf_values
-
-    cumulative_volume_undersize = np.cumsum(normalized_volume_fraction)
-    cumulative_volume_oversize = 1 - cumulative_volume_undersize
-
-    plot_data['dp_values_ft'] = dp_values_ft
-    plot_data['volume_fraction'] = normalized_volume_fraction
-    plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
-    plot_data['cumulative_volume_oversize'] = cumulative_volume_oversize
-
-    # --- New E and Entrained Flow Calculations ---
+    # Step 6: Entrainment Fraction (E) Calculation
     Ug_si = inputs['V_g_input']
     Q_liquid_mass_flow_rate_input_si = inputs['Q_liquid_mass_flow_rate_input']
     rho_l_input_si = inputs['rho_l_input']
@@ -510,7 +587,7 @@ def _calculate_all_data(inputs, num_points_override=None):
     Wl_for_e_calc = Q_liquid_mass_flow_rate_input_si
     
     E_fraction = calculate_e_interpolated(Ug_si, Wl_for_e_calc)
-    
+        
     Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
     
     Q_entrained_total_volume_flow_rate_si = 0.0
@@ -522,17 +599,7 @@ def _calculate_all_data(inputs, num_points_override=None):
     results['Q_entrained_total_mass_flow_rate_si'] = Q_entrained_total_mass_flow_rate_si
     results['Q_entrained_total_volume_flow_rate_si'] = Q_entrained_total_volume_flow_rate_si
 
-    entrained_mass_flow_rate_per_dp = [
-        fv_norm * Q_entrained_total_mass_flow_rate_si for fv_norm in normalized_volume_fraction
-    ]
-    plot_data['entrained_mass_flow_rate_per_dp'] = entrained_mass_flow_rate_per_dp
-
-    entrained_volume_flow_rate_per_dp = [
-        fv_norm * Q_entrained_total_volume_flow_rate_si for fv_norm in normalized_volume_fraction
-    ]
-    plot_data['entrained_volume_flow_rate_per_dp'] = entrained_volume_flow_rate_per_dp
-
-    return results, plot_data
+    return results
 
 
 # Initialize session state for inputs and results if not already present
@@ -554,8 +621,10 @@ if 'inputs' not in st.session_state:
 
 if 'calculation_results' not in st.session_state:
     st.session_state.calculation_results = None
-if 'plot_data' not in st.session_state:
-    st.session_state.plot_data = None
+if 'plot_data_original' not in st.session_state:
+    st.session_state.plot_data_original = None
+if 'plot_data_adjusted' not in st.session_state:
+    st.session_state.plot_data_adjusted = None
 if 'report_date' not in st.session_state:
     st.session_state.report_date = ""
 
@@ -646,11 +715,16 @@ if page == "Input Parameters":
     import datetime
     st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        st.session_state.calculation_results, st.session_state.plot_data = _calculate_all_data(st.session_state.inputs)
+        # Only perform main scalar calculations here
+        st.session_state.calculation_results = _perform_main_calculations(st.session_state.inputs)
+        # Distribution data will be calculated on the results page
+        st.session_state.plot_data_original = None
+        st.session_state.plot_data_adjusted = None
     except Exception as e:
         st.error(f"An error occurred during calculation: {e}")
         st.session_state.calculation_results = None
-        st.session_state.plot_data = None
+        st.session_state.plot_data_original = None
+        st.session_state.plot_data_adjusted = None
 
 
 # --- Page: Calculation Steps ---
@@ -683,7 +757,6 @@ elif page == "Calculation Steps":
         st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
         st.write(f"Selected Inlet Device: {st.session_state.inputs['inlet_device']}")
         st.write(f"Total Liquid Mass Flow Rate: {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}") # New input
-        st.write(f"Number of Points for Distribution: {st.session_state.inputs['num_points_distribution']}") # Display here
         st.markdown("---")
 
         # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
@@ -735,11 +808,17 @@ elif page == "Calculation Steps":
 
         # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
         st.markdown("#### Step 5: Calculate Parameters for Upper-Limit Log Normal Distribution")
-        d_max_display = from_fps(results['d_max_fps'], "length")
+        d_max_original_display = from_fps(results['d_max_original_fps'], "length")
+        d_max_adjusted_display = from_fps(results['d_max_adjusted_fps'], "length")
         st.write(f"Using typical values from the article: $a = {A_DISTRIBUTION}$ and $\\delta = {DELTA_DISTRIBUTION}$.")
-        st.write(f"Equation: $d_{{max}} = a \\cdot d_{{v50, adjusted}}$")
-        st.write(f"Calculation (FPS): $d_{{max}} = {A_DISTRIBUTION} \\cdot {results['dv50_adjusted_fps']:.6f} \\text{{ ft}} = {results['d_max_fps']:.6f} \\text{{ ft}}$")
-        st.success(f"**Result:** Maximum Droplet Size ($d_{{max}}$) = **{results['d_max_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({d_max_display:.6f} {len_unit})")
+        st.write(f"For **Original** $d_{{v50}}$:")
+        st.write(f"Equation: $d_{{max, original}} = a \\cdot d_{{v50, original}}$")
+        st.write(f"Calculation (FPS): $d_{{max, original}} = {A_DISTRIBUTION} \\cdot {results['dv50_original_fps']:.6f} \\text{{ ft}} = {results['d_max_original_fps']:.6f} \\text{{ ft}}$")
+        st.success(f"**Result:** Maximum Droplet Size (Original $d_{{max}}$) = **{results['d_max_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({d_max_original_display:.6f} {len_unit})")
+        st.write(f"For **Adjusted** $d_{{v50}}$:")
+        st.write(f"Equation: $d_{{max, adjusted}} = a \\cdot d_{{v50, adjusted}}$")
+        st.write(f"Calculation (FPS): $d_{{max, adjusted}} = {A_DISTRIBUTION} \\cdot {results['dv50_adjusted_fps']:.6f} \\text{{ ft}} = {results['d_max_adjusted_fps']:.6f} \\text{{ ft}}$")
+        st.success(f"**Result:** Maximum Droplet Size (Adjusted $d_{{max}}$) = **{results['d_max_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({d_max_adjusted_display:.6f} {len_unit})")
 
         st.markdown("---")
 
@@ -775,108 +854,179 @@ elif page == "Droplet Distribution Results":
     st.markdown("---") # Add a separator after the input
 
     # Recalculate plot_data specifically on this page after num_points_distribution is updated
-    try:
-        st.session_state.calculation_results, st.session_state.plot_data = _calculate_all_data(
-            st.session_state.inputs,
-            num_points_override=st.session_state.inputs['num_points_distribution']
-        )
-    except Exception as e:
-        st.error(f"An error occurred during plot data calculation: {e}")
-        st.session_state.calculation_results = None
-        st.session_state.plot_data = None
+    # Ensure calculation_results are available before proceeding
+    if st.session_state.calculation_results:
+        try:
+            results = st.session_state.calculation_results
+            num_points = st.session_state.inputs['num_points_distribution']
+            
+            # Generate data for original distribution
+            st.session_state.plot_data_original = _generate_distribution_data(
+                results['dv50_original_fps'],
+                results['d_max_original_fps'],
+                num_points,
+                results['E_fraction'],
+                st.session_state.inputs['Q_liquid_mass_flow_rate_input'],
+                st.session_state.inputs['rho_l_input']
+            )
+
+            # Generate data for adjusted distribution
+            st.session_state.plot_data_adjusted = _generate_distribution_data(
+                results['dv50_adjusted_fps'],
+                results['d_max_adjusted_fps'],
+                num_points,
+                results['E_fraction'],
+                st.session_state.inputs['Q_liquid_mass_flow_rate_input'],
+                st.session_state.inputs['rho_l_input']
+            )
+
+        except Exception as e:
+            st.error(f"An error occurred during plot data calculation: {e}")
+            st.session_state.plot_data_original = None
+            st.session_state.plot_data_adjusted = None
+    else:
+        st.warning("Please go to the 'Input Parameters' page and modify inputs to trigger calculations and generate the plot data.")
 
 
-    if st.session_state.plot_data:
-        plot_data = st.session_state.plot_data
+    if st.session_state.plot_data_original and st.session_state.plot_data_adjusted:
+        plot_data_original = st.session_state.plot_data_original
+        plot_data_adjusted = st.session_state.plot_data_adjusted
         
         # Define unit labels for plotting
         micron_unit_label = "µm" # Always SI for this version
         mass_flow_unit = "kg/s"
         vol_flow_unit = "m³/s" # New unit for Streamlit display
 
-        dp_values_microns = plot_data['dp_values_ft'] * FT_TO_MICRON
-        # Use normalized_volume_fraction for plotting the distribution curve as per article's definition
-        volume_fraction_for_plot = plot_data['volume_fraction'] # This is now the normalized one
-        cumulative_volume_undersize = plot_data['cumulative_volume_undersize']
-        cumulative_volume_oversize = plot_data['cumulative_volume_oversize'] 
-        entrained_mass_flow_rate_per_dp = plot_data['entrained_mass_flow_rate_per_dp'] # New data
-        entrained_volume_flow_rate_per_dp = plot_data['entrained_volume_flow_rate_per_dp'] # New data
+        # --- Plot for Original Distribution ---
+        st.subheader("3.1. Distribution Before Inlet Device")
+        dp_values_microns_original = plot_data_original['dp_values_ft'] * FT_TO_MICRON
+        fig_original, ax_original = plt.subplots(figsize=(10, 6))
 
-        fig, ax1 = plt.subplots(figsize=(10, 6))
+        ax_original.plot(dp_values_microns_original, plot_data_original['cumulative_volume_undersize'], 'o-', label='Cumulative Volume Undersize', markersize=2, color='#1f77b4')
+        ax_original.plot(dp_values_microns_original, plot_data_original['cumulative_volume_oversize'], 'o-', label='Cumulative Volume Oversize', markersize=2, color='#d62728')
+        ax_original.set_xlabel(f'Droplet Size ({micron_unit_label})', fontsize=12)
+        ax_original.set_ylabel('Cumulative Volume Fraction', color='black', fontsize=12)
+        ax_original.tick_params(axis='y', labelcolor='black')
+        ax_original.set_ylim(0, 1.05)
+        ax_original.set_xlim(0, max(dp_values_microns_original) * 1.1 if dp_values_microns_original.size > 0 else 1000)
 
-        ax1.plot(dp_values_microns, cumulative_volume_undersize, 'o-', label='Cumulative Volume Undersize', markersize=2, color='#1f77b4')
-        ax1.plot(dp_values_microns, cumulative_volume_oversize, 'o-', label='Cumulative Volume Oversize', markersize=2, color='#d62728')
-        ax1.set_xlabel(f'Droplet Size ({micron_unit_label})', fontsize=12)
-        ax1.set_ylabel('Cumulative Volume Fraction', color='black', fontsize=12)
-        ax1.tick_params(axis='y', labelcolor='black')
-        ax1.set_ylim(0, 1.05) # Adjusted y-limit for cumulative fractions
-        ax1.set_xlim(0, max(dp_values_microns) * 1.1 if dp_values_microns.size > 0 else 1000)
+        ax2_original = ax_original.twinx()
+        ax2_original.plot(dp_values_microns_original, plot_data_original['volume_fraction'], 'o-', label='Volume/Mass Fraction', markersize=2, color='#2ca02c')
+        ax2_original.set_ylabel('Volume/Mass Fraction', color='black', fontsize=12)
+        ax2_original.tick_params(axis='y', labelcolor='black')
+        max_norm_fv_original = max(plot_data_original['volume_fraction']) if plot_data_original['volume_fraction'].size > 0 else 0.1
+        ax2_original.set_ylim(0, max_norm_fv_original * 1.2)
 
-        ax2 = ax1.twinx()
-        # Plot normalized volume fraction on the right axis
-        ax2.plot(dp_values_microns, volume_fraction_for_plot, 'o-', label='Volume/Mass Fraction', markersize=2, color='#2ca02c')
-        ax2.set_ylabel('Volume/Mass Fraction', color='black', fontsize=12)
-        ax2.tick_params(axis='y', labelcolor='black')
-        
-        # Adjust y-limit for normalized volume/mass fraction (it now sums to 1)
-        max_norm_fv = max(volume_fraction_for_plot) if volume_fraction_for_plot.size > 0 else 0.1
-        ax2.set_ylim(0, max_norm_fv * 1.2)
+        lines_original, labels_original = ax_original.get_legend_handles_labels()
+        lines2_original, labels2_original = ax2_original.get_legend_handles_labels()
+        ax2_original.legend(lines_original + lines2_original, labels_original + labels2_original, loc='upper left', fontsize=10)
 
-        lines, labels = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines + lines2, labels + labels2, loc='upper left', fontsize=10)
-
-        plt.title('Entrainment Droplet Size Distribution', fontsize=14)
+        plt.title('Entrainment Droplet Size Distribution (Before Inlet Device)', fontsize=14)
         plt.grid(True, linestyle='--', alpha=0.7)
-        st.pyplot(fig)
+        st.pyplot(fig_original)
 
-        # --- Volume Fraction Data Table for Streamlit App ---
-        st.subheader("Volume Fraction Data Table (All Points)")
-        if dp_values_microns.size > 0:
-            # Display all data points based on user's input
-            full_df = pd.DataFrame({
-                "Droplet Size (µm)": dp_values_microns,
-                "Volume Fraction": volume_fraction_for_plot,
-                "Cumulative Undersize": cumulative_volume_undersize,
-                f"Entrained Mass Flow ({mass_flow_unit})": entrained_mass_flow_rate_per_dp,
-                f"Entrained Volume Flow ({vol_flow_unit})": entrained_volume_flow_rate_per_dp # New column
+        # --- Plot for Adjusted Distribution ---
+        st.subheader("3.2. Distribution After Inlet Device (Shift Factor Applied)")
+        dp_values_microns_adjusted = plot_data_adjusted['dp_values_ft'] * FT_TO_MICRON
+        fig_adjusted, ax_adjusted = plt.subplots(figsize=(10, 6))
+
+        ax_adjusted.plot(dp_values_microns_adjusted, plot_data_adjusted['cumulative_volume_undersize'], 'o-', label='Cumulative Volume Undersize', markersize=2, color='#1f77b4')
+        ax_adjusted.plot(dp_values_microns_adjusted, plot_data_adjusted['cumulative_volume_oversize'], 'o-', label='Cumulative Volume Oversize', markersize=2, color='#d62728')
+        ax_adjusted.set_xlabel(f'Droplet Size ({micron_unit_label})', fontsize=12)
+        ax_adjusted.set_ylabel('Cumulative Volume Fraction', color='black', fontsize=12)
+        ax_adjusted.tick_params(axis='y', labelcolor='black')
+        ax_adjusted.set_ylim(0, 1.05)
+        ax_adjusted.set_xlim(0, max(dp_values_microns_adjusted) * 1.1 if dp_values_microns_adjusted.size > 0 else 1000)
+
+        ax2_adjusted = ax_adjusted.twinx()
+        ax2_adjusted.plot(dp_values_microns_adjusted, plot_data_adjusted['volume_fraction'], 'o-', label='Volume/Mass Fraction', markersize=2, color='#2ca02c')
+        ax2_adjusted.set_ylabel('Volume/Mass Fraction', color='black', fontsize=12)
+        ax2_adjusted.tick_params(axis='y', labelcolor='black')
+        max_norm_fv_adjusted = max(plot_data_adjusted['volume_fraction']) if plot_data_adjusted['volume_fraction'].size > 0 else 0.1
+        ax2_adjusted.set_ylim(0, max_norm_fv_adjusted * 1.2)
+
+        lines_adjusted, labels_adjusted = ax_adjusted.get_legend_handles_labels()
+        lines2_adjusted, labels2_adjusted = ax2_adjusted.get_legend_handles_labels()
+        ax2_adjusted.legend(lines_adjusted + lines2_adjusted, labels_adjusted + labels2_adjusted, loc='upper left', fontsize=10)
+
+        plt.title('Entrainment Droplet Size Distribution (After Inlet Device)', fontsize=14)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        st.pyplot(fig_adjusted)
+
+
+        # --- Volume Fraction Data Tables for Streamlit App ---
+        st.subheader("4. Volume Fraction Data Tables (All Points)")
+
+        # Original Data Table
+        st.markdown("#### 4.1. Distribution Before Inlet Device")
+        if dp_values_microns_original.size > 0:
+            full_df_original = pd.DataFrame({
+                "Droplet Size (µm)": dp_values_microns_original,
+                "Volume Fraction": plot_data_original['volume_fraction'],
+                "Cumulative Undersize": plot_data_original['cumulative_volume_undersize'],
+                f"Entrained Mass Flow ({mass_flow_unit})": plot_data_original['entrained_mass_flow_rate_per_dp'],
+                f"Entrained Volume Flow ({vol_flow_unit})": plot_data_original['entrained_volume_flow_rate_per_dp']
             })
-            st.dataframe(full_df.style.format({
+            st.dataframe(full_df_original.style.format({
                 "Droplet Size (µm)": "{:.2f}",
                 "Volume Fraction": "{:.4f}",
                 "Cumulative Undersize": "{:.4f}",
                 f"Entrained Mass Flow ({mass_flow_unit})": "{:.6f}",
-                f"Entrained Volume Flow ({vol_flow_unit})": "{:.9f}" # Format for new column
+                f"Entrained Volume Flow ({vol_flow_unit})": "{:.9f}"
             }))
-            
-            # Display sum check for verification
-            st.markdown(f"**Sum of Entrained Mass Flow in Table:** {np.sum(entrained_mass_flow_rate_per_dp):.6f} {mass_flow_unit}")
+            st.markdown(f"**Sum of Entrained Mass Flow in Table:** {np.sum(plot_data_original['entrained_mass_flow_rate_per_dp']):.6f} {mass_flow_unit}")
             st.markdown(f"**Total Entrained Liquid Mass Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_mass_flow_rate_si']:.6f} {mass_flow_unit}")
-            st.markdown(f"**Sum of Entrained Volume Flow in Table:** {np.sum(entrained_volume_flow_rate_per_dp):.9f} {vol_flow_unit}") # New sum check
-            st.markdown(f"**Total Entrained Liquid Volume Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_volume_flow_rate_si']:.9f} {vol_flow_unit}") # New sum check
+            st.markdown(f"**Sum of Entrained Volume Flow in Table:** {np.sum(plot_data_original['entrained_volume_flow_rate_per_dp']):.9f} {vol_flow_unit}")
+            st.markdown(f"**Total Entrained Liquid Volume Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_volume_flow_rate_si']:.9f} {vol_flow_unit}")
             st.info("Note: The sum of 'Entrained Flow' in the table should now precisely match the 'Total Entrained Liquid Flow Rate' from Step 6, as the volume frequency distribution is normalized and all calculated points are displayed.")
-
         else:
-            st.info("No data available to display in the table. Please check your input parameters.")
+            st.info("No data available to display in the table for original distribution. Please check your input parameters.")
 
-        # Save plot to a BytesIO object for PDF embedding
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=300)
-        buf.seek(0) # Rewind to the beginning of the buffer
+        # Adjusted Data Table
+        st.markdown("#### 4.2. Distribution After Inlet Device (Shift Factor Applied)")
+        if dp_values_microns_adjusted.size > 0:
+            full_df_adjusted = pd.DataFrame({
+                "Droplet Size (µm)": dp_values_microns_adjusted,
+                "Volume Fraction": plot_data_adjusted['volume_fraction'],
+                "Cumulative Undersize": plot_data_adjusted['cumulative_volume_undersize'],
+                f"Entrained Mass Flow ({mass_flow_unit})": plot_data_adjusted['entrained_mass_flow_rate_per_dp'],
+                f"Entrained Volume Flow ({vol_flow_unit})": plot_data_adjusted['entrained_volume_flow_rate_per_dp']
+            })
+            st.dataframe(full_df_adjusted.style.format({
+                "Droplet Size (µm)": "{:.2f}",
+                "Volume Fraction": "{:.4f}",
+                "Cumulative Undersize": "{:.4f}",
+                f"Entrained Mass Flow ({mass_flow_unit})": "{:.6f}",
+                f"Entrained Volume Flow ({vol_flow_unit})": "{:.9f}"
+            }))
+            st.markdown(f"**Sum of Entrained Mass Flow in Table:** {np.sum(plot_data_adjusted['entrained_mass_flow_rate_per_dp']):.6f} {mass_flow_unit}")
+            st.markdown(f"**Total Entrained Liquid Mass Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_mass_flow_rate_si']:.6f} {mass_flow_unit}")
+            st.markdown(f"**Sum of Entrained Volume Flow in Table:** {np.sum(plot_data_adjusted['entrained_volume_flow_rate_per_dp']):.9f} {vol_flow_unit}")
+            st.markdown(f"**Total Entrained Liquid Volume Flow Rate (Step 6):** {st.session_state.calculation_results['Q_entrained_total_volume_flow_rate_si']:.9f} {vol_flow_unit}")
+            st.info("Note: The sum of 'Entrained Flow' in the table should now precisely match the 'Total Entrained Liquid Flow Rate' from Step 6, as the volume frequency distribution is normalized and all calculated points are displayed.")
+        else:
+            st.info("No data available to display in the table for adjusted distribution. Please check your input parameters.")
 
-        # Prepare data for PDF table (all points based on user's input)
-        plot_data_for_pdf_table = {
-            'dp_values_microns': dp_values_microns,
-            'volume_fraction': volume_fraction_for_plot, # Pass normalized for PDF table
-            'cumulative_volume_undersize': cumulative_volume_undersize,
-            'cumulative_volume_oversize': cumulative_volume_oversize, # Keep this in plot_data for internal consistency if needed elsewhere, but not used in PDF table
-            'entrained_mass_flow_rate_per_dp': entrained_mass_flow_rate_per_dp,
-            'entrained_volume_flow_rate_per_dp': entrained_volume_flow_rate_per_dp # Pass new data
-        }
+
+        # Save plots to BytesIO objects for PDF embedding
+        buf_original = io.BytesIO()
+        fig_original.savefig(buf_original, format="png", dpi=300)
+        buf_original.seek(0)
+
+        buf_adjusted = io.BytesIO()
+        fig_adjusted.savefig(buf_adjusted, format="png", dpi=300)
+        buf_adjusted.seek(0)
 
         st.download_button(
             label="Download Report as PDF",
-            data=generate_pdf_report(st.session_state.inputs, st.session_state.calculation_results, buf, plot_data_for_pdf_table),
+            data=generate_pdf_report(
+                st.session_state.inputs,
+                st.session_state.calculation_results,
+                buf_original,
+                buf_adjusted,
+                plot_data_original,
+                plot_data_adjusted
+            ),
             file_name="Droplet_Distribution_Report.pdf",
             mime="application/pdf"
         )
