@@ -281,7 +281,6 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"Liquid Surface Tension (sigma): {sigma_display_val:.3f} N/m")
     pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
     pdf.chapter_body(f"Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} kg/s") # New input
-    pdf.chapter_body(f"Number of Points for Distribution: {inputs['num_points_distribution']}") # New input
     pdf.ln(5)
 
     # --- Calculation Steps ---
@@ -523,16 +522,7 @@ if page == "Input Parameters":
             help="The inlet device influences the droplet size distribution downstream."
         )
     
-    st.subheader("Distribution Plot Settings")
-    st.session_state.inputs['num_points_distribution'] = st.number_input(
-        "Number of Points for Distribution Plot/Table",
-        min_value=10,
-        max_value=100,
-        value=st.session_state.inputs['num_points_distribution'],
-        step=5,
-        key='num_points_distribution_input',
-        help="Adjust the number of data points used to generate the droplet size distribution curve and table (10-100)."
-    )
+    # Removed from here: st.subheader("Distribution Plot Settings") and num_points_distribution input
 
 
     st.markdown("---")
@@ -708,7 +698,6 @@ elif page == "Calculation Steps":
         st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
         st.write(f"Selected Inlet Device: {st.session_state.inputs['inlet_device']}")
         st.write(f"Total Liquid Mass Flow Rate: {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}") # New input
-        st.write(f"Number of Points for Distribution: {st.session_state.inputs['num_points_distribution']}") # New input
         st.markdown("---")
 
         # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
@@ -785,6 +774,19 @@ elif page == "Calculation Steps":
 # --- Page: Droplet Distribution Results ---
 elif page == "Droplet Distribution Results":
     st.header("3. Particle Size Distribution Plot")
+
+    # Moved the input for num_points_distribution here
+    st.subheader("Distribution Plot Settings")
+    st.session_state.inputs['num_points_distribution'] = st.number_input(
+        "Number of Points for Distribution Plot/Table",
+        min_value=10,
+        max_value=100,
+        value=st.session_state.inputs['num_points_distribution'],
+        step=5,
+        key='num_points_distribution_input',
+        help="Adjust the number of data points used to generate the droplet size distribution curve and table (10-100)."
+    )
+    st.markdown("---") # Add a separator after the input
 
     if st.session_state.plot_data:
         plot_data = st.session_state.plot_data
