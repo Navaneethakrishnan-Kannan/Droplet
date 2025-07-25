@@ -281,6 +281,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"Liquid Surface Tension (sigma): {sigma_display_val:.3f} N/m")
     pdf.chapter_body(f"Selected Inlet Device: {inputs['inlet_device']}")
     pdf.chapter_body(f"Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} kg/s") # New input
+    pdf.chapter_body(f"Number of Points for Distribution: {inputs['num_points_distribution']}") # New input
     pdf.ln(5)
 
     # --- Calculation Steps ---
@@ -308,6 +309,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer, plot_data_for_table)
     pdf.chapter_body(f"  Gas Viscosity (mu_g): {to_fps(inputs['mu_g_input'], 'viscosity'):.8f} lb/ft-sec")
     pdf.chapter_body(f"  Liquid Surface Tension (sigma): {inputs['sigma_fps']:.4f} poundal/ft")
     pdf.chapter_body(f"  Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit_pdf}") # New input
+    pdf.chapter_body(f"  Number of Points for Distribution: {inputs['num_points_distribution']}") # New input
     pdf.ln(5)
 
     # Step 1
@@ -429,6 +431,7 @@ if 'inputs' not in st.session_state:
         'sigma_custom': 0.03, # N/m (30 dyne/cm)
         'inlet_device': "No inlet device",
         'Q_liquid_mass_flow_rate_input': 0.1, # New input: kg/s (example value)
+        'num_points_distribution': 20, # Default number of points
     }
     # Initialize sigma_fps based on the initial default surface tension option
     st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE_DYNE_CM["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
@@ -519,6 +522,18 @@ if page == "Input Parameters":
             key='inlet_device_select',
             help="The inlet device influences the droplet size distribution downstream."
         )
+    
+    st.subheader("Distribution Plot Settings")
+    st.session_state.inputs['num_points_distribution'] = st.number_input(
+        "Number of Points for Distribution Plot/Table",
+        min_value=10,
+        max_value=100,
+        value=st.session_state.inputs['num_points_distribution'],
+        step=5,
+        key='num_points_distribution_input',
+        help="Adjust the number of data points used to generate the droplet size distribution curve and table (10-100)."
+    )
+
 
     st.markdown("---")
 
@@ -581,8 +596,9 @@ if page == "Input Parameters":
         dp_min_calc_fps = dv50_adjusted_fps * 0.01
         dp_max_calc_fps = d_max_fps * 0.999
 
-        # Number of points is 20 as per user request
-        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 20)
+        # Use user-defined number of points
+        num_points = st.session_state.inputs['num_points_distribution']
+        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, num_points)
         
         volume_fraction_pdf_values = [] # Store PDF values initially
 
@@ -692,6 +708,7 @@ elif page == "Calculation Steps":
         st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
         st.write(f"Selected Inlet Device: {st.session_state.inputs['inlet_device']}")
         st.write(f"Total Liquid Mass Flow Rate: {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}") # New input
+        st.write(f"Number of Points for Distribution: {st.session_state.inputs['num_points_distribution']}") # New input
         st.markdown("---")
 
         # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
@@ -814,9 +831,9 @@ elif page == "Droplet Distribution Results":
         st.pyplot(fig)
 
         # --- Volume Fraction Data Table for Streamlit App ---
-        st.subheader("Volume Fraction Data Table (All 20 Points)")
+        st.subheader("Volume Fraction Data Table (All Points)")
         if dp_values_microns.size > 0:
-            # Display all 20 data points as requested
+            # Display all data points based on user's input
             full_df = pd.DataFrame({
                 "Droplet Size (µm)": dp_values_microns,
                 "Volume Fraction": volume_fraction_for_plot,
@@ -847,7 +864,7 @@ elif page == "Droplet Distribution Results":
         fig.savefig(buf, format="png", dpi=300)
         buf.seek(0) # Rewind to the beginning of the buffer
 
-        # Prepare data for PDF table (all 20 points)
+        # Prepare data for PDF table (all points based on user's input)
         plot_data_for_pdf_table = {
             'dp_values_microns': dp_values_microns,
             'volume_fraction': volume_fraction_for_plot, # Pass normalized for PDF table
