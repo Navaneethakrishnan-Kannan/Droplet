@@ -385,7 +385,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
 
 
     # --- Droplet Distribution Plots ---
-    pdf.add_page()
+    pdf.add_page() # Start a new page for the plots
     pdf.chapter_title('3. Droplet Distribution Results')
     
     pdf.chapter_body("The following graphs show the calculated entrainment droplet size distribution:")
@@ -399,6 +399,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     pdf.ln(5)
 
     # Adjusted Distribution Plot
+    pdf.add_page() # Ensure the second plot is on a new page
     pdf.set_font('Arial', 'B', 10)
     pdf.cell(0, 7, '3.2. Distribution After Inlet Device (Shift Factor Applied)', 0, 1, 'L')
     pdf.ln(2)
