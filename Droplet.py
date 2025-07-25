@@ -30,65 +30,58 @@ DYNE_CM_TO_NM = 0.001
 A_DISTRIBUTION = 4.0
 DELTA_DISTRIBUTION = 0.72
 
-# Figure 9 Approximation for Droplet Size Distribution Shift Factor
+# Figure 9 Approximation Data for Droplet Size Distribution Shift Factor
+# Data extracted from the provided image (Figure 9 table)
+SHIFT_FACTOR_DATA = {
+    "No inlet device": {
+        "rho_v_squared": np.array([0, 100, 200, 300, 400, 500, 600, 650, 675]),
+        "shift_factor": np.array([1.00, 0.98, 0.95, 0.90, 0.77, 0.50, 0.20, 0.08, 0.08]) # Using 0.08 as per image
+    },
+    "Diverter plate": {
+        "rho_v_squared": np.array([0,31, 148, 269, 368, 574, 626, 660, 744, 775, 812, 870, 903, 941, 952]),
+        "shift_factor": np.array([1,0.99, 0.95, 0.91, 0.87, 0.79, 0.75, 0.71, 0.62, 0.56, 0.52, 0.48, 0.43, 0.35, 0.39])
+    },
+    "Half-pipe": {
+        "rho_v_squared": np.array([0,287, 579, 843, 1064, 1236, 1389, 1519, 1587, 1659, 1743, 1782, 1819, 1892, 1917]),
+        "shift_factor": np.array([1,0.96, 0.94, 0.90, 0.87, 0.83, 0.80, 0.71, 0.67, 0.57, 0.43, 0.35, 0.25, 0.07, 0.04])
+    },
+    "Vane-type": {
+        "rho_v_squared": np.array([0,1433, 2297, 3162, 4026, 4891, 5323, 5754, 6229, 6583, 6686, 6775, 6862, 6891, 6894, 6979, 7070]),
+        "shift_factor": np.array([1,0.99, 0.97, 0.95, 0.92, 0.89, 0.87, 0.83, 0.78, 0.72, 0.66, 0.60, 0.54, 0.48, 0.43, 0.37, 0.31])
+    },
+    "Cyclonic": {
+        "rho_v_squared": np.array([0,553, 2294, 2716, 4014, 5312, 5745, 7043, 7908, 8340, 8772, 9205, 9637, 10069, 10501, 10932, 11364, 11794, 12169, 12467, 12716, 12923, 13123, 13323, 13509, 13688, 13891]),
+        "shift_factor": np.array([1,0.99, 0.98, 0.97, 1.00, 0.95, 0.94, 0.93, 0.92, 0.91, 0.90, 0.89, 0.87, 0.86, 0.84, 0.81, 0.77, 0.72, 0.67, 0.61, 0.56, 0.50, 0.45, 0.39, 0.34, 0.28, 0.23, 0.18])
+    }
+}
+
+
 def get_shift_factor(inlet_device, rho_v_squared):
     """
-    Approximates the droplet size distribution shift factor based on the inlet device
-    and inlet momentum (rho_g * V_g^2) from Figure 9.
-    The values are interpolated or set to a low value if beyond effective range.
+    Calculates the droplet size distribution shift factor using linear interpolation
+    based on the inlet device and inlet momentum (rho_g * V_g^2) from Figure 9 data.
+    Handles out-of-range values by clamping to the nearest boundary and provides a warning.
     """
-    if inlet_device == "No inlet device":
-        return 1.0 # No shift if no inlet device
-    elif inlet_device == "Diverter plate":
-        # Curve starts at ~1.0, drops to ~0.6 at 2000, and near 0 by 2500
-        if rho_v_squared <= 1000:
-            return 1.0 - (0.1 * rho_v_squared / 1000)
-        elif rho_v_squared <= 2000:
-            # From (1000, 0.9) to (2000, 0.6)
-            return 0.9 - (0.3 * (rho_v_squared - 1000) / 1000)
-        elif rho_v_squared <= 2500:
-            # From (2000, 0.6) to (2500, ~0.05)
-            return 0.6 - (0.55 * (rho_v_squared - 2000) / 500)
-        else: # Beyond effective capacity, very low shift factor
-            return 0.05
-    elif inlet_device == "Half-pipe":
-        # Curve starts at ~1.0, drops sharply after ~1500, near 0.2 at 2000, and near 0 by 2500
-        if rho_v_squared <= 1000:
-            return 1.0 - (0.1 * rho_v_squared / 1000)
-        elif rho_v_squared <= 1500:
-            # From (1000, 0.9) to (1500, 0.7)
-            return 0.9 - (0.2 * (rho_v_squared - 1000) / 500)
-        elif rho_v_squared <= 2000:
-            # From (1500, 0.7) to (2000, 0.2)
-            return 0.7 - (0.5 * (rho_v_squared - 1500) / 500)
-        elif rho_v_squared <= 2500:
-            # From (2000, 0.2) to (2500, ~0.05)
-            return 0.2 - (0.15 * (rho_v_squared - 2000) / 500)
-        else: # Beyond effective capacity, very low shift factor as per user's example
-            return 0.05
-    elif inlet_device == "Vane-type":
-        # Curve starts at ~1.0, drops slowly, around 0.8 at 6000, 0.5 at 10000
-        if rho_v_squared <= 5000:
-            return 1.0 - (0.05 * rho_v_squared / 5000) # Roughly 0.95 at 5000
-        elif rho_v_squared <= 7000:
-            # From (5000, ~0.95) to (7000, ~0.7)
-            # To get 0.8 at 6000: (0.95 - 0.25 * (6000-5000)/2000) = 0.95 - 0.125 = 0.825 (closer to 0.8)
-            return 0.95 - (0.25 * (rho_v_squared - 5000) / 2000)
-        elif rho_v_squared <= 10000:
-            # From (7000, ~0.7) to (10000, ~0.5)
-            return 0.7 - (0.2 * (rho_v_squared - 7000) / 3000)
-        else:
-            return 0.5 # Stays relatively high even at higher momentum
-    elif inlet_device == "Cyclonic":
-        # Curve starts at ~1.0, very slowly drops, around 0.95 at 6000, 0.9 at 10000, 0.2 at 14000
-        if rho_v_squared <= 10000:
-            # To get 0.95 at 6000: (1.0 - (0.1 * 6000 / 10000)) = 0.94. This is close to 0.95.
-            return 1.0 - (0.1 * rho_v_squared / 10000)
-        elif rho_v_squared <= 14000:
-            return 0.9 - (0.7 * (rho_v_squared - 10000) / 4000)
-        else:
-            return 0.2 # Placeholder for very high values
-    return 1.0 # Default if an unknown inlet device is somehow selected
+    if inlet_device not in SHIFT_FACTOR_DATA:
+        st.warning(f"Unknown inlet device: '{inlet_device}'. Defaulting shift factor to 1.0.")
+        return 1.0
+
+    data = SHIFT_FACTOR_DATA[inlet_device]
+    x_values = data["rho_v_squared"]
+    y_values = data["shift_factor"]
+
+    # Check if rho_v_squared is outside the defined range
+    if rho_v_squared < x_values.min():
+        st.warning(f"Inlet momentum ({rho_v_squared:.2f} Pa) is below the minimum defined for '{inlet_device}' ({x_values.min():.2f} Pa). Using minimum shift factor: {y_values.min():.3f}.")
+        return y_values.min() # Use the smallest shift factor if below range
+    elif rho_v_squared > x_values.max():
+        st.warning(f"Inlet momentum ({rho_v_squared:.2f} Pa) is above the maximum defined for '{inlet_device}' ({x_values.max():.2f} Pa). Using maximum shift factor: {y_values.max():.3f}.")
+        return y_values.max() # Use the largest shift factor if above range
+
+    # Perform linear interpolation
+    shift_factor = np.interp(rho_v_squared, x_values, y_values)
+    return float(shift_factor)
+
 
 # --- Unit Conversion Factors (for internal FPS calculation) ---
 M_TO_FT = 3.28084 # 1 meter = 3.28084 feet
@@ -573,7 +566,8 @@ if page == "Input Parameters":
         results['rho_v_squared_fps'] = rho_v_squared_fps
 
         # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
-        shift_factor = get_shift_factor(st.session_state.inputs['inlet_device'], rho_v_squared_fps)
+        # The get_shift_factor function now handles interpolation and warnings
+        shift_factor = get_shift_factor(st.session_state.inputs['inlet_device'], from_fps(rho_v_squared_fps, 'momentum')) # Pass SI unit for rho_v_squared to get_shift_factor for consistent data handling
         dv50_adjusted_fps = dv50_original_fps * shift_factor
         results['shift_factor'] = shift_factor
         results['dv50_adjusted_fps'] = dv50_adjusted_fps
@@ -586,7 +580,7 @@ if page == "Input Parameters":
         dp_min_calc_fps = dv50_adjusted_fps * 0.01
         dp_max_calc_fps = d_max_fps * 0.999
 
-        # Changed number of points to 20 as per user request
+        # Number of points is 20 as per user request
         dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, 20)
         
         volume_fraction_pdf_values = [] # Store PDF values initially
