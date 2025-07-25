@@ -417,7 +417,7 @@ All inputs and outputs are in **SI Units**.
 """)
 
 # --- Function to perform all calculations ---
-def _calculate_all_data(inputs):
+def _calculate_all_data(inputs, num_points_override=None):
     """Performs all calculations and returns results and plot_data."""
     results = {}
     plot_data = {
@@ -468,7 +468,8 @@ def _calculate_all_data(inputs):
     dp_min_calc_fps = dv50_adjusted_fps * 0.01
     dp_max_calc_fps = d_max_fps * 0.999
 
-    num_points = inputs['num_points_distribution']
+    # Use the override if provided, otherwise use the value from inputs
+    num_points = num_points_override if num_points_override is not None else inputs['num_points_distribution']
     dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, num_points)
     
     volume_fraction_pdf_values = []
@@ -558,17 +559,6 @@ if 'plot_data' not in st.session_state:
 if 'report_date' not in st.session_state:
     st.session_state.report_date = ""
 
-# Always perform calculations at the top level so changes in any input trigger recalculation
-import datetime
-st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-try:
-    st.session_state.calculation_results, st.session_state.plot_data = _calculate_all_data(st.session_state.inputs)
-except Exception as e:
-    st.error(f"An error occurred during calculation: {e}")
-    st.session_state.calculation_results = None
-    st.session_state.plot_data = None
-
 
 # Sidebar for navigation
 st.sidebar.header("Navigation")
@@ -651,6 +641,16 @@ if page == "Input Parameters":
         )
     
     st.markdown("---")
+
+    # When inputs on this page change, trigger recalculation for initial state
+    import datetime
+    st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        st.session_state.calculation_results, st.session_state.plot_data = _calculate_all_data(st.session_state.inputs)
+    except Exception as e:
+        st.error(f"An error occurred during calculation: {e}")
+        st.session_state.calculation_results = None
+        st.session_state.plot_data = None
 
 
 # --- Page: Calculation Steps ---
@@ -774,6 +774,18 @@ elif page == "Droplet Distribution Results":
     )
     st.markdown("---") # Add a separator after the input
 
+    # Recalculate plot_data specifically on this page after num_points_distribution is updated
+    try:
+        st.session_state.calculation_results, st.session_state.plot_data = _calculate_all_data(
+            st.session_state.inputs,
+            num_points_override=st.session_state.inputs['num_points_distribution']
+        )
+    except Exception as e:
+        st.error(f"An error occurred during plot data calculation: {e}")
+        st.session_state.calculation_results = None
+        st.session_state.plot_data = None
+
+
     if st.session_state.plot_data:
         plot_data = st.session_state.plot_data
         
@@ -878,5 +890,5 @@ st.markdown(r"""
 * **Log Normal Distribution Parameters:** The article states typical values for $a=4.0$ and $\delta=0.72$. The formula for $\delta$ shown in the article ($\delta=\frac{0.394}{log(\frac{V_{so}}{V_{so}})}$) appears to be a typographical error, so the constant value $\delta=0.72$ is used as indicated in the text.
 * **Units:** This application now exclusively uses the International System (SI) units for all inputs and outputs. All internal calculations are still performed in FPS units to align with the article's correlations, with automatic conversions handled internally.
 * **Entrainment Fraction (E) Calculation:** As per your instruction, the 'Wl' parameter in the empirical equations for Entrainment Fraction (E) is now directly the 'Total Liquid Mass Flow Rate' (kg/s) provided by the user. Linear interpolation is applied for Ug values between the defined points. The accuracy of these correlations is dependent on the range and conditions for which they were originally developed.
-* **Volume/Mass Fraction Distribution:** The 'Volume Fraction' and 'Mass Fraction' values displayed in the table and plot now represent the **normalized volume frequency distribution** as stated in the article. This means the sum of these fractions over the entire distribution range is 1. Consequently, the sum of 'Entrained Flow (kg/s)' for sampled points in the table will approximate the 'Total Entrained Liquid Flow Rate' calculated in Step 6, with the full sum matching if all data points were included.
+* **Volume/Mass Fraction Distribution:** The 'Volume Fraction' and 'Mass Fraction' values displayed in the table and plot now represent the **normalized volume frequency distribution** as stated in the article. This means the sum of these fractions over the entire distribution range is 1. Consequently, the sum of 'Entrained Flow (kg/s)' for sampled points in the table will approximate the 'Total Entrained Liquid Mass Flow Rate' calculated in Step 6, with the full sum matching if all data points were included.
 """)
