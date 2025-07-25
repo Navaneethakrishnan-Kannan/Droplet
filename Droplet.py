@@ -416,9 +416,126 @@ based on the principles and correlations discussed in the article "Quantifying S
 All inputs and outputs are in **SI Units**.
 """)
 
+# --- Function to perform all calculations ---
+def _calculate_all_data(inputs):
+    """Performs all calculations and returns results and plot_data."""
+    results = {}
+    plot_data = {
+        'dp_values_ft': [],
+        'volume_fraction': [],
+        'cumulative_volume_undersize': [],
+        'cumulative_volume_oversize': [],
+        'entrained_mass_flow_rate_per_dp': [],
+        'entrained_volume_flow_rate_per_dp': []
+    }
+
+    # Convert all SI inputs to FPS for consistent calculation
+    D = to_fps(inputs['D_input'], "length")
+    rho_l = to_fps(inputs['rho_l_input'], "density")
+    mu_l = to_fps(inputs['mu_l_input'], "viscosity")
+    V_g = to_fps(inputs['V_g_input'], "velocity")
+    rho_g = to_fps(inputs['rho_g_input'], "density")
+    mu_g = to_fps(inputs['mu_g_input'], "viscosity")
+    sigma = inputs['sigma_fps'] # This is already in poundal/ft
+
+    # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
+    if mu_g == 0: raise ValueError("Gas viscosity (μg) cannot be zero for Reynolds number calculation.")
+    Re_g = (D * V_g * rho_g) / mu_g
+    results['Re_g'] = Re_g
+
+    # Step 2: Calculate Volume Median Diameter ($d_{v50}$) without inlet device effect
+    if V_g == 0 or rho_g == 0 or rho_l == 0 or mu_l == 0:
+        raise ValueError("Gas velocity, gas density, liquid density, and liquid viscosity must be non-zero for $d_{v50}$ calculation.")
+    
+    dv50_original_fps = 0.01 * (sigma / (rho_g * V_g**2)) * (Re_g**(2/3)) * ((rho_g / rho_l)**(-1/3)) * ((mu_g / mu_l)**(2/3))
+    results['dv50_original_fps'] = dv50_original_fps
+
+    # Step 3: Determine Inlet Momentum (rho_g V_g^2)
+    rho_v_squared_fps = rho_g * V_g**2
+    results['rho_v_squared_fps'] = rho_v_squared_fps
+
+    # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
+    shift_factor = get_shift_factor(inputs['inlet_device'], rho_v_squared_fps)
+    dv50_adjusted_fps = dv50_original_fps * shift_factor
+    results['shift_factor'] = shift_factor
+    results['dv50_adjusted_fps'] = dv50_adjusted_fps
+
+    # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
+    d_max_fps = A_DISTRIBUTION * dv50_adjusted_fps
+    results['d_max_fps'] = d_max_fps
+
+    # Step 6: Generate Volume Fraction (PDF values) and Cumulative Volume Fraction for a range of droplet sizes
+    dp_min_calc_fps = dv50_adjusted_fps * 0.01
+    dp_max_calc_fps = d_max_fps * 0.999
+
+    num_points = inputs['num_points_distribution']
+    dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, num_points)
+    
+    volume_fraction_pdf_values = []
+
+    for dp in dp_values_ft:
+        if dp >= d_max_fps:
+            z_val = np.inf
+        else:
+            z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
+        
+        if dp == 0 or (d_max_fps - dp) == 0:
+            fv_dp = 0
+        else:
+            fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi * dp * (d_max_fps - dp)))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
+        
+        volume_fraction_pdf_values.append(fv_dp)
+    
+    volume_fraction_pdf_values_array = np.array(volume_fraction_pdf_values)
+    sum_of_pdf_values = np.sum(volume_fraction_pdf_values_array)
+    
+    normalized_volume_fraction = np.zeros_like(volume_fraction_pdf_values_array)
+    if sum_of_pdf_values > 1e-9:
+        normalized_volume_fraction = volume_fraction_pdf_values_array / sum_of_pdf_values
+
+    cumulative_volume_undersize = np.cumsum(normalized_volume_fraction)
+    cumulative_volume_oversize = 1 - cumulative_volume_undersize
+
+    plot_data['dp_values_ft'] = dp_values_ft
+    plot_data['volume_fraction'] = normalized_volume_fraction
+    plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
+    plot_data['cumulative_volume_oversize'] = cumulative_volume_oversize
+
+    # --- New E and Entrained Flow Calculations ---
+    Ug_si = inputs['V_g_input']
+    Q_liquid_mass_flow_rate_input_si = inputs['Q_liquid_mass_flow_rate_input']
+    rho_l_input_si = inputs['rho_l_input']
+    
+    Wl_for_e_calc = Q_liquid_mass_flow_rate_input_si
+    
+    E_fraction = calculate_e_interpolated(Ug_si, Wl_for_e_calc)
+    
+    Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
+    
+    Q_entrained_total_volume_flow_rate_si = 0.0
+    if rho_l_input_si > 0:
+        Q_entrained_total_volume_flow_rate_si = Q_entrained_total_mass_flow_rate_si / rho_l_input_si
+
+    results['Wl_for_e_calc'] = Wl_for_e_calc
+    results['E_fraction'] = E_fraction
+    results['Q_entrained_total_mass_flow_rate_si'] = Q_entrained_total_mass_flow_rate_si
+    results['Q_entrained_total_volume_flow_rate_si'] = Q_entrained_total_volume_flow_rate_si
+
+    entrained_mass_flow_rate_per_dp = [
+        fv_norm * Q_entrained_total_mass_flow_rate_si for fv_norm in normalized_volume_fraction
+    ]
+    plot_data['entrained_mass_flow_rate_per_dp'] = entrained_mass_flow_rate_per_dp
+
+    entrained_volume_flow_rate_per_dp = [
+        fv_norm * Q_entrained_total_volume_flow_rate_si for fv_norm in normalized_volume_fraction
+    ]
+    plot_data['entrained_volume_flow_rate_per_dp'] = entrained_volume_flow_rate_per_dp
+
+    return results, plot_data
+
+
 # Initialize session state for inputs and results if not already present
 if 'inputs' not in st.session_state:
-    # Initialize inputs with default SI values
     st.session_state.inputs = {
         'D_input': 0.3048, # m (1 ft)
         'rho_l_input': 640.7, # kg/m3 (40 lb/ft3)
@@ -432,7 +549,6 @@ if 'inputs' not in st.session_state:
         'Q_liquid_mass_flow_rate_input': 0.1, # New input: kg/s (example value)
         'num_points_distribution': 20, # Default number of points
     }
-    # Initialize sigma_fps based on the initial default surface tension option
     st.session_state.inputs['sigma_fps'] = SURFACE_TENSION_TABLE_DYNE_CM["Water/gas"] * DYNE_CM_TO_POUNDAL_FT
 
 if 'calculation_results' not in st.session_state:
@@ -441,6 +557,18 @@ if 'plot_data' not in st.session_state:
     st.session_state.plot_data = None
 if 'report_date' not in st.session_state:
     st.session_state.report_date = ""
+
+# Always perform calculations at the top level so changes in any input trigger recalculation
+import datetime
+st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+try:
+    st.session_state.calculation_results, st.session_state.plot_data = _calculate_all_data(st.session_state.inputs)
+except Exception as e:
+    st.error(f"An error occurred during calculation: {e}")
+    st.session_state.calculation_results = None
+    st.session_state.plot_data = None
+
 
 # Sidebar for navigation
 st.sidebar.header("Navigation")
@@ -522,150 +650,7 @@ if page == "Input Parameters":
             help="The inlet device influences the droplet size distribution downstream."
         )
     
-    # Removed from here: st.subheader("Distribution Plot Settings") and num_points_distribution input
-
-
     st.markdown("---")
-
-    # The calculation block is now outside any button, so it runs on every input change
-    import datetime
-    st.session_state.report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    try:
-        # Initialize plot_data with all expected keys to avoid KeyError later
-        plot_data = {
-            'dp_values_ft': [],
-            'volume_fraction': [],
-            'cumulative_volume_undersize': [],
-            'cumulative_volume_oversize': [],
-            'entrained_mass_flow_rate_per_dp': [], # New key for entrained flow rate per droplet size
-            'entrained_volume_flow_rate_per_dp': [] # New key for entrained volume flow rate per droplet size
-        }
-
-        # Convert all SI inputs to FPS for consistent calculation
-        D = to_fps(st.session_state.inputs['D_input'], "length")
-        rho_l = to_fps(st.session_state.inputs['rho_l_input'], "density")
-        mu_l = to_fps(st.session_state.inputs['mu_l_input'], "viscosity")
-        V_g = to_fps(st.session_state.inputs['V_g_input'], "velocity")
-        rho_g = to_fps(st.session_state.inputs['rho_g_input'], "density")
-        mu_g = to_fps(st.session_state.inputs['mu_g_input'], "viscosity")
-        sigma = st.session_state.inputs['sigma_fps'] # This is already in poundal/ft
-
-        # --- Perform Calculations ---
-        results = {}
-        
-        # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
-        if mu_g == 0: raise ValueError("Gas viscosity (μg) cannot be zero for Reynolds number calculation.")
-        Re_g = (D * V_g * rho_g) / mu_g
-        results['Re_g'] = Re_g
-
-        # Step 2: Calculate Volume Median Diameter ($d_{v50}$) without inlet device effect
-        if V_g == 0 or rho_g == 0 or rho_l == 0 or mu_l == 0:
-            raise ValueError("Gas velocity, gas density, liquid density, and liquid viscosity must be non-zero for $d_{v50}$ calculation.")
-        
-        # Corrected line: Changed Re_g**2 to Re_g**(2/3) as per user request
-        dv50_original_fps = 0.01 * (sigma / (rho_g * V_g**2)) * (Re_g**(2/3)) * ((rho_g / rho_l)**(-1/3)) * ((mu_g / mu_l)**(2/3))
-        results['dv50_original_fps'] = dv50_original_fps
-
-        # Step 3: Determine Inlet Momentum (rho_g V_g^2)
-        rho_v_squared_fps = rho_g * V_g**2
-        results['rho_v_squared_fps'] = rho_v_squared_fps
-
-        # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
-        # The get_shift_factor function now handles interpolation and warnings
-        shift_factor = get_shift_factor(st.session_state.inputs['inlet_device'], rho_v_squared_fps) # Corrected: Pass FPS value directly
-        dv50_adjusted_fps = dv50_original_fps * shift_factor
-        results['shift_factor'] = shift_factor
-        results['dv50_adjusted_fps'] = dv50_adjusted_fps
-
-        # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
-        d_max_fps = A_DISTRIBUTION * dv50_adjusted_fps
-        results['d_max_fps'] = d_max_fps
-
-        # Step 6: Generate Volume Fraction (PDF values) and Cumulative Volume Fraction for a range of droplet sizes
-        dp_min_calc_fps = dv50_adjusted_fps * 0.01
-        dp_max_calc_fps = d_max_fps * 0.999
-
-        # Use user-defined number of points
-        num_points = st.session_state.inputs['num_points_distribution']
-        dp_values_ft = np.linspace(dp_min_calc_fps, dp_max_calc_fps, num_points)
-        
-        volume_fraction_pdf_values = [] # Store PDF values initially
-
-        for dp in dp_values_ft:
-            # Ensure dp is not equal to d_max_fps to avoid division by zero in log argument
-            if dp >= d_max_fps:
-                z_val = np.inf # Or handle as per distribution definition for upper limit
-            else:
-                z_val = np.log((A_DISTRIBUTION * dp) / (d_max_fps - dp))
-            
-            # Handle potential division by zero for fv_dp if dp or (d_max_fps - dp) is zero
-            if dp == 0 or (d_max_fps - dp) == 0:
-                fv_dp = 0
-            else:
-                fv_dp = ((DELTA_DISTRIBUTION * d_max_fps) / (np.sqrt(np.pi * dp * (d_max_fps - dp)))) * np.exp(-DELTA_DISTRIBUTION**2 * z_val**2)
-            
-            volume_fraction_pdf_values.append(fv_dp)
-        
-        # Normalize the volume fraction PDF values to get a distribution that sums to 1
-        volume_fraction_pdf_values_array = np.array(volume_fraction_pdf_values)
-        sum_of_pdf_values = np.sum(volume_fraction_pdf_values_array)
-        
-        normalized_volume_fraction = np.zeros_like(volume_fraction_pdf_values_array)
-        if sum_of_pdf_values > 1e-9: # Avoid division by zero if all PDF values are tiny
-            normalized_volume_fraction = volume_fraction_pdf_values_array / sum_of_pdf_values
-
-        # Recalculate cumulative values based on normalized volume fraction
-        cumulative_volume_undersize = np.cumsum(normalized_volume_fraction)
-        cumulative_volume_oversize = 1 - cumulative_volume_undersize
-
-        plot_data['dp_values_ft'] = dp_values_ft
-        plot_data['volume_fraction'] = normalized_volume_fraction # Use normalized for consistent plotting and table sum
-        plot_data['cumulative_volume_undersize'] = cumulative_volume_undersize
-        plot_data['cumulative_volume_oversize'] = cumulative_volume_oversize # This is now directly 1 - cumulative_undersize
-
-        # --- New E and Entrained Flow Calculations ---
-        Ug_si = st.session_state.inputs['V_g_input']
-        Q_liquid_mass_flow_rate_input_si = st.session_state.inputs['Q_liquid_mass_flow_rate_input']
-        rho_l_input_si = st.session_state.inputs['rho_l_input'] # Get liquid density in SI for volume flow calculation
-        
-        # As per user's instruction, Wl for the empirical equation is directly the total liquid mass flow rate
-        Wl_for_e_calc = Q_liquid_mass_flow_rate_input_si
-        
-        E_fraction = calculate_e_interpolated(Ug_si, Wl_for_e_calc)
-        
-        Q_entrained_total_mass_flow_rate_si = E_fraction * Q_liquid_mass_flow_rate_input_si
-        
-        # Calculate total entrained liquid volume flow rate
-        Q_entrained_total_volume_flow_rate_si = 0.0
-        if rho_l_input_si > 0: # Avoid division by zero
-            Q_entrained_total_volume_flow_rate_si = Q_entrained_total_mass_flow_rate_si / rho_l_input_si
-
-        results['Wl_for_e_calc'] = Wl_for_e_calc # Store the value used for E calculation
-        results['E_fraction'] = E_fraction
-        results['Q_entrained_total_mass_flow_rate_si'] = Q_entrained_total_mass_flow_rate_si
-        results['Q_entrained_total_volume_flow_rate_si'] = Q_entrained_total_volume_flow_rate_si # Store total volume flow
-
-        # Calculate entrained mass flow rate per droplet size interval using the normalized volume fraction
-        entrained_mass_flow_rate_per_dp = [
-            fv_norm * Q_entrained_total_mass_flow_rate_si for fv_norm in normalized_volume_fraction
-        ]
-        plot_data['entrained_mass_flow_rate_per_dp'] = entrained_mass_flow_rate_per_dp
-
-        # Calculate entrained volume flow rate per droplet size interval
-        entrained_volume_flow_rate_per_dp = [
-            fv_norm * Q_entrained_total_volume_flow_rate_si for fv_norm in normalized_volume_fraction
-        ]
-        plot_data['entrained_volume_flow_rate_per_dp'] = entrained_volume_flow_rate_per_dp
-
-
-        st.session_state.calculation_results = results
-        st.session_state.plot_data = plot_data # Assign the fully formed dictionary
-
-    except Exception as e:
-        st.error(f"An error occurred during calculation: {e}")
-        st.session_state.calculation_results = None
-        st.session_state.plot_data = None # Ensure it's None on error
 
 
 # --- Page: Calculation Steps ---
@@ -698,6 +683,7 @@ elif page == "Calculation Steps":
         st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
         st.write(f"Selected Inlet Device: {st.session_state.inputs['inlet_device']}")
         st.write(f"Total Liquid Mass Flow Rate: {st.session_state.inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}") # New input
+        st.write(f"Number of Points for Distribution: {st.session_state.inputs['num_points_distribution']}") # Display here
         st.markdown("---")
 
         # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
@@ -892,5 +878,5 @@ st.markdown(r"""
 * **Log Normal Distribution Parameters:** The article states typical values for $a=4.0$ and $\delta=0.72$. The formula for $\delta$ shown in the article ($\delta=\frac{0.394}{log(\frac{V_{so}}{V_{so}})}$) appears to be a typographical error, so the constant value $\delta=0.72$ is used as indicated in the text.
 * **Units:** This application now exclusively uses the International System (SI) units for all inputs and outputs. All internal calculations are still performed in FPS units to align with the article's correlations, with automatic conversions handled internally.
 * **Entrainment Fraction (E) Calculation:** As per your instruction, the 'Wl' parameter in the empirical equations for Entrainment Fraction (E) is now directly the 'Total Liquid Mass Flow Rate' (kg/s) provided by the user. Linear interpolation is applied for Ug values between the defined points. The accuracy of these correlations is dependent on the range and conditions for which they were originally developed.
-* **Volume/Mass Fraction Distribution:** The 'Volume Fraction' and 'Mass Fraction' values displayed in the table and plot now represent the **normalized volume frequency distribution** as stated in the article. This means the sum of these fractions over the entire distribution range is 1. Consequently, the sum of 'Entrained Flow (kg/s)' for sampled points in the table will approximate the 'Total Entrained Liquid Mass Flow Rate' calculated in Step 6, with the full sum matching if all data points were included.
+* **Volume/Mass Fraction Distribution:** The 'Volume Fraction' and 'Mass Fraction' values displayed in the table and plot now represent the **normalized volume frequency distribution** as stated in the article. This means the sum of these fractions over the entire distribution range is 1. Consequently, the sum of 'Entrained Flow (kg/s)' for sampled points in the table will approximate the 'Total Entrained Liquid Flow Rate' calculated in Step 6, with the full sum matching if all data points were included.
 """)
