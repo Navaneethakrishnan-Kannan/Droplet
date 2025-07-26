@@ -31,27 +31,27 @@ A_DISTRIBUTION = 4.0
 DELTA_DISTRIBUTION = 0.72
 
 # Figure 9 Approximation Data for Droplet Size Distribution Shift Factor
-# Data extracted from the provided image (Figure 9 table)
+# Data stored as Python lists, will be converted to np.array inside functions for robustness
 SHIFT_FACTOR_DATA = {
     "No inlet device": {
-        "rho_v_squared": np.array([0, 100, 200, 300, 400, 500, 600, 650, 675]), # 9 elements
-        "shift_factor": np.array([1.00, 0.98, 0.95, 0.90, 0.77, 0.50, 0.20, 0.08, 0.08]) # 9 elements
+        "rho_v_squared": [0, 100, 200, 300, 400, 500, 600, 650, 675], # 9 elements
+        "shift_factor": [1.00, 0.98, 0.95, 0.90, 0.77, 0.50, 0.20, 0.08, 0.08] # 9 elements
     },
     "Diverter plate": {
-        "rho_v_squared": np.array([0,31, 148, 269, 368, 574, 626, 660, 744, 775, 812, 870, 903, 941, 952]), # 15 elements
-        "shift_factor": np.array([1,0.99, 0.95, 0.91, 0.87, 0.79, 0.75, 0.71, 0.62, 0.56, 0.52, 0.48, 0.43, 0.35, 0.39]) # 15 elements
+        "rho_v_squared": [0,31, 148, 269, 368, 574, 626, 660, 744, 775, 812, 870, 903, 941, 952], # 15 elements
+        "shift_factor": [1,0.99, 0.95, 0.91, 0.87, 0.79, 0.75, 0.71, 0.62, 0.56, 0.52, 0.48, 0.43, 0.35, 0.39] # 15 elements
     },
     "Half-pipe": {
-        "rho_v_squared": np.array([0,287, 579, 843, 1064, 1236, 1389, 1519, 1587, 1659, 1743, 1782, 1819, 1892, 1917]), # 15 elements
-        "shift_factor": np.array([1,0.96, 0.94, 0.90, 0.87, 0.83, 0.80, 0.71, 0.67, 0.57, 0.43, 0.35, 0.25, 0.07, 0.04]) # 15 elements
+        "rho_v_squared": [0,287, 579, 843, 1064, 1236, 1389, 1519, 1587, 1659, 1743, 1782, 1819, 1892, 1917], # 15 elements
+        "shift_factor": [1,0.96, 0.94, 0.90, 0.87, 0.83, 0.80, 0.71, 0.67, 0.57, 0.43, 0.35, 0.25, 0.07, 0.04] # 15 elements
     },
     "Vane-type": {
-        "rho_v_squared": np.array([0,1433, 2297, 3162, 4026, 4891, 5323, 5754, 6229, 6583, 6686, 6775, 6862, 6891, 6894, 6979, 7070]), # 17 elements
-        "shift_factor": np.array([1,0.99, 0.97, 0.95, 0.92, 0.89, 0.87, 0.83, 0.78, 0.72, 0.66, 0.60, 0.54, 0.48, 0.43, 0.37, 0.31]) # 17 elements
+        "rho_v_squared": [0,1433, 2297, 3162, 4026, 4891, 5323, 5754, 6229, 6583, 6686, 6775, 6862, 6891, 6894, 6979, 7070], # 17 elements
+        "shift_factor": [1,0.99, 0.97, 0.95, 0.92, 0.89, 0.87, 0.83, 0.78, 0.72, 0.66, 0.60, 0.54, 0.48, 0.43, 0.37, 0.31] # 17 elements
     },
     "Cyclonic": {
-        "rho_v_squared": np.array([0,553, 2294, 2716, 4014, 5312, 5745, 7043, 7908, 8340, 8772, 9205, 9637, 10069, 10501, 10932, 11364, 11794, 12169, 12467, 12716, 12923, 13123, 13323, 13509, 13688, 13891]), # 27 elements
-        "shift_factor": np.array([1,0.99, 0.98, 0.97, 1.00, 0.95, 0.94, 0.93, 0.92, 0.91, 0.90, 0.89, 0.87, 0.86, 0.84, 0.81, 0.77, 0.72, 0.67, 0.61, 0.56, 0.50, 0.45, 0.39, 0.34, 0.28, 0.23]) # 27 elements - CORRECTED
+        "rho_v_squared": [0,553, 2294, 2716, 4014, 5312, 5745, 7043, 7908, 8340, 8772, 9205, 9637, 10069, 10501, 10932, 11364, 11794, 12169, 12467, 12716, 12923, 13123, 13323, 13509, 13688, 13891], # 27 elements
+        "shift_factor": [1,0.99, 0.98, 0.97, 1.00, 0.95, 0.94, 0.93, 0.92, 0.91, 0.90, 0.89, 0.87, 0.86, 0.84, 0.81, 0.77, 0.72, 0.67, 0.61, 0.56, 0.50, 0.45, 0.39, 0.34, 0.28, 0.23] # 27 elements
     }
 }
 
@@ -67,8 +67,8 @@ def get_shift_factor(inlet_device, rho_v_squared):
         return 1.0
 
     data = SHIFT_FACTOR_DATA[inlet_device]
-    x_values = data["rho_v_squared"]
-    y_values = data["shift_factor"]
+    x_values = np.array(data["rho_v_squared"]) # Convert to numpy array here
+    y_values = np.array(data["shift_factor"]) # Convert to numpy array here
 
     # Check if rho_v_squared is outside the defined range
     if rho_v_squared < x_values.min():
@@ -78,6 +78,10 @@ def get_shift_factor(inlet_device, rho_v_squared):
         # Corrected: Use the minimum shift factor for values above the maximum defined range
         st.warning(f"Inlet momentum ({rho_v_squared:.2f} lb/ft-sec^2) is above the maximum defined for '{inlet_device}' ({x_values.max():.2f} lb/ft-sec^2). Using minimum shift factor: {y_values.min():.3f}.")
         return y_values.min() # Use the smallest shift factor if above range
+
+    # Debugging print statements
+    print(f"DEBUG: get_shift_factor - Inlet Device: {inlet_device}")
+    print(f"DEBUG: get_shift_factor - len(x_values): {len(x_values)}, len(y_values): {len(y_values)}")
 
     # Perform linear interpolation
     shift_factor = np.interp(rho_v_squared, x_values, y_values)
@@ -221,19 +225,20 @@ def calculate_e_interpolated(Ug_target, Wl_mass_flow):
     return E_interpolated
 
 # Figure 6: C_d vs Re_p data (digitized from plot)
+# Data stored as Python lists, will be converted to np.array inside functions for robustness
 CD_VS_REP_DATA = {
-    "Re_p": np.array([
+    "Re_p": [
         0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0,
         2.0, 3.0, 4.0, 5.0, 7.0, 10.0, 20.0, 30.0, 40.0, 50.0,
         70.0, 100.0, 150.0, 200.0, 300.0, 400.0, 500.0, 700.0, 1000.0, 2000.0,
         5000.0, 10000.0, 100000.0, 200000.0, 500000.0, 1000000.0
-    ]),
-    "Cd": np.array([
+    ],
+    "Cd": [
         25000, 12500, 5000, 2500, 1250, 500, 250, 125, 50, 25,
         12.5, 8.3, 6.25, 5.0, 3.5, 2.5, 1.5, 1.0, 0.8, 0.7,
         0.6, 0.5, 0.45, 0.42, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4,
         0.4, 0.4, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65
-    ])
+    ]
 }
 
 def calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps, g_fps=32.174):
@@ -262,6 +267,14 @@ def calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps, g_fps=32
     Re_p = 0.0
     Cd = 0.0
 
+    # Convert to numpy arrays here for interpolation
+    cd_re_p_values = np.array(CD_VS_REP_DATA["Re_p"])
+    cd_cd_values = np.array(CD_VS_REP_DATA["Cd"])
+
+    # Debugging print statements
+    print(f"DEBUG: calculate_terminal_velocity - len(cd_re_p_values): {len(cd_re_p_values)}, len(cd_cd_values): {len(cd_cd_values)}")
+
+
     for _ in range(max_iterations):
         if Vt_current <= 0 or dp_fps <= 0: # Handle cases where velocity or diameter is zero/negative
             Re_p = 0.0
@@ -269,7 +282,7 @@ def calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps, g_fps=32
             Re_p = (dp_fps * Vt_current * rho_g_fps) / mu_g_fps
 
         # Get Cd from Re_p using interpolation from Figure 6 data
-        Cd = np.interp(Re_p, CD_VS_REP_DATA["Re_p"], CD_VS_REP_DATA["Cd"])
+        Cd = np.interp(Re_p, cd_re_p_values, cd_cd_values)
         
         # Ensure Cd is not zero or negative
         if Cd <= 0:
@@ -751,9 +764,6 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     pdf.chapter_body(f"Calculated F-factor: {results['F_factor']:.3f}")
     pdf.chapter_body(f"Effective Gas Velocity in Separator (V_g_effective_separator): {from_fps(results['V_g_effective_separator_fps'], 'velocity'):.2f} {vel_unit_pdf}")
     pdf.ln(5)
-
-    # Debug print statement for PDF generation context
-    print(f"PDF Gen: Length of gravity_details_table_data: {len(plot_data_after_gravity['gravity_details_table_data']) if plot_data_after_gravity and 'gravity_details_table_data' in plot_data_after_gravity else 'N/A'}")
 
     # Display detailed table for gravity separation
     if plot_data_after_gravity and plot_data_after_gravity['gravity_details_table_data']:
@@ -1519,7 +1529,6 @@ def _perform_main_calculations(inputs):
             st.warning("Invalid vertical separator gas velocity for gravity settling calculation. Efficiency set to 0.")
             gravity_separation_efficiency = 0.0
         else:
-            # For reporting, calculate an average efficiency or a representative one
             pass # Calculated later in _calculate_and_apply_separation
     
     results['gravity_separation_efficiency'] = gravity_separation_efficiency # This will be updated after calling _calculate_and_apply_separation
@@ -1927,445 +1936,7 @@ if page == "Input Parameters":
                 st.session_state.calculation_results['mist_extractor_separation_efficiency'] = 0.0
 
         else:
-            st.session_state.plot_data_after_mist_extractor = None
-
-
-    except Exception as e:
-        st.error(f"An error occurred during calculation: {e}")
-        st.session_state.calculation_results = None
-        st.session_state.plot_data_original = None
-        st.session_state.plot_data_adjusted = None
-        st.session_state.plot_data_after_gravity = None
-        st.session_state.plot_data_after_mist_extractor = None
-
-
-# --- Page: Calculation Steps ---
-elif page == "Calculation Steps":
-    st.header("2. Step-by-Step Calculation Results")
-
-    if st.session_state.calculation_results:
-        results = st.session_state.calculation_results
-        inputs = st.session_state.inputs
-        
-        # Define unit labels for SI system
-        len_unit = "m"
-        dens_unit = "kg/m³"
-        vel_unit = "m/s"
-        visc_unit = "Pa·s"
-        momentum_unit = "Pa"
-        micron_unit_label = "µm"
-        mass_flow_unit = "kg/s"
-        vol_flow_unit = "m³/s" # New unit for Streamlit display
-        pressure_unit = "psig"
-        in_unit = "in"
-
-        # Display inputs used for calculation (original SI values)
-        st.subheader("Inputs Used for Calculation (SI Units)")
-        st.write(f"Pipe Inside Diameter (D): {inputs['D_input']:.4f} {len_unit}")
-        st.write(f"Liquid Density (ρl): {inputs['rho_l_input']:.2f} {dens_unit}")
-        st.write(f"Liquid Viscosity (μl): {inputs['mu_l_input']:.8f} {visc_unit}")
-        st.write(f"Gas Velocity in Feed Pipe (Vg): {inputs['V_g_input']:.2f} {vel_unit}")
-        st.write(f"Gas Density (ρg): {inputs['rho_g_input']:.5f} {dens_unit}")
-        st.write(f"Gas Viscosity (μg): {inputs['mu_g_input']:.9f} {visc_unit}")
-        # Display selected surface tension in SI units
-        sigma_display_val = inputs['sigma_custom'] # Use sigma_custom for display
-        st.write(f"Liquid Surface Tension (σ): {sigma_display_val:.3f} N/m")
-        st.write(f"Selected Inlet Device: {inputs['inlet_device']}")
-        st.write(f"Total Liquid Mass Flow Rate: {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}") # New input
-        st.write(f"Operating Pressure: {inputs['pressure_psig_input']:.1f} {pressure_unit}")
-        st.write(f"Separator Type: {inputs['separator_type']}")
-        if inputs['separator_type'] == "Horizontal":
-            st.write(f"Gas Space Height (hg): {inputs['h_g_input']:.3f} {len_unit}")
-            st.write(f"Effective Separation Length (Le): {inputs['L_e_input']:.3f} {len_unit}")
-        else: # Vertical
-            st.write(f"Separator Diameter: {inputs['D_separator_input']:.3f} {len_unit}")
-            st.write(f"Gas Gravity Section Height (L_e): {inputs['L_e_input']:.3f} {len_unit}")
-        st.write(f"Length from Inlet Device to Mist Extractor (L_to_ME): {inputs['L_to_ME_input']:.3f} {len_unit}")
-        st.write(f"Perforated Plate Used: {'Yes' if inputs['perforated_plate_option'] else 'No'}")
-        st.write(f"Mist Extractor Type: {inputs['mist_extractor_type']}")
-        if inputs['mist_extractor_type'] == "Mesh Pad":
-            st.write(f"  Mesh Pad Type: {inputs['mesh_pad_type']}")
-            st.write(f"  Mesh Pad Thickness: {inputs['mesh_pad_thickness_in']:.2f} {in_unit}")
-        elif inputs['mist_extractor_type'] == "Vane-Type":
-            st.write(f"  Vane Type: {inputs['vane_type']}")
-            st.write(f"  Flow Direction: {inputs['vane_flow_direction']}")
-            st.write(f"  Number of Bends: {inputs['vane_num_bends']}")
-            st.write(f"  Vane Spacing: {inputs['vane_spacing_in']:.2f} {in_unit}")
-            st.write(f"  Bend Angle: {inputs['vane_bend_angle_deg']:.1f} deg")
-        elif inputs['mist_extractor_type'] == "Cyclonic":
-            st.write(f"  Cyclone Type: {inputs['cyclone_type']}")
-            st.write(f"  Cyclone Diameter: {inputs['cyclone_diameter_in']:.2f} {in_unit}")
-            st.write(f"  Cyclone Length: {inputs['cyclone_length_in']:.2f} {in_unit}")
-            st.write(f"  Inlet Swirl Angle: {inputs['cyclone_swirl_angle_deg']:.1f} deg")
-        st.markdown("---")
-
-        # Step 1: Calculate Superficial Gas Reynolds Number (Re_g)
-        st.markdown("#### Step 1: Calculate Superficial Gas Reynolds Number ($Re_g$)")
-        D_pipe_fps = to_fps(inputs['D_input'], "length")
-        V_g_input_fps = to_fps(inputs['V_g_input'], "velocity")
-        rho_g_fps = to_fps(inputs['rho_g_input'], "density")
-        mu_g_fps = to_fps(inputs['mu_g_input'], "viscosity")
-
-        st.write(f"Equation: $Re_g = \\frac{{D \\cdot V_g \\cdot \\rho_g}}{{\\mu_g}}$")
-        st.write(f"Calculation (FPS): $Re_g = \\frac{{{D_pipe_fps:.2f} \\text{{ ft}} \\cdot {V_g_input_fps:.2f} \\text{{ ft/sec}} \\cdot {rho_g_fps:.4f} \\text{{ lb/ft}}^3}}{{{mu_g_fps:.8f} \\text{{ lb/ft-sec}}}} = {results['Re_g']:.2f}$")
-        st.success(f"**Result:** Superficial Gas Reynolds Number ($Re_g$) = **{results['Re_g']:.2f}** (dimensionless)")
-
-        st.markdown("---")
-
-        # Step 2: Calculate Volume Median Diameter ($d_{v50}$) without inlet device effect
-        st.markdown("#### Step 2: Calculate Initial Volume Median Diameter ($d_{v50}$) (Kataoka et al., 1983)")
-        rho_l_fps = to_fps(inputs['rho_l_input'], "density")
-        mu_l_fps = to_fps(inputs['mu_l_input'], "viscosity")
-
-        dv50_original_display = from_fps(results['dv50_original_fps'], "length")
-        
-        # Updated LaTeX formula for display
-        st.write(f"Equation: $d_{{v50}} = 0.01 \\left(\\frac{{\\sigma}}{{\\rho_g V_g^2}}\\right) Re_g^{{2/3}} \\left(\\frac{{\\rho_g}}{{\\rho_l}}\\right)^{{-1/3}} \\left(\\frac{{\\mu_g}}{{\\mu_l}}\\right)^{{2/3}}$")
-        st.write(f"Calculation (FPS): $d_{{v50}} = 0.01 \\left(\\frac{{{inputs['sigma_fps']:.4f}}}{{{rho_g_fps:.4f} \\cdot ({V_g_input_fps:.2f})^2}}\\right) ({results['Re_g']:.2f})^{{2/3}} \\left(\\frac{{{rho_g_fps:.4f}}}{{{rho_l_fps:.2f}}}\\right)^{{-0.333}} \\left(\\frac{{{mu_g_fps:.8f}}}{{{mu_l_fps:.7f}}}\\right)^{{0.667}}$")
-        st.success(f"**Result:** Initial Volume Median Diameter ($d_{{v50}}$) = **{results['dv50_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({dv50_original_display:.6f} {len_unit})")
-
-        st.markdown("---")
-
-        # Step 3: Determine Inlet Momentum (rho_g V_g^2)
-        st.markdown("#### Step 3: Calculate Inlet Momentum ($\\rho_g V_g^2$)")
-        rho_v_squared_display = from_fps(results['rho_v_squared_fps'], "momentum")
-        st.write(f"Equation: $\\rho_g V_g^2 = \\rho_g \\cdot V_g^2$")
-        st.write(f"Calculation (FPS): $\\rho_g V_g^2 = {rho_g_fps:.4f} \\text{{ lb/ft}}^3 \\cdot ({V_g_input_fps:.2f} \\text{{ ft/sec}})^2 = {results['rho_v_squared_fps']:.2f} \\text{{ lb/ft-sec}}^2$")
-        st.success(f"**Result:** Inlet Momentum ($\\rho_g V_g^2$) = **{rho_v_squared_display:.2f} {momentum_unit}**")
-
-        st.markdown("---")
-
-        # Step 4: Apply Inlet Device "Droplet Size Distribution Shift Factor"
-        st.markdown("#### Step 4: Apply Inlet Device Effect (Droplet Size Distribution Shift Factor)")
-        st.write(f"Selected Inlet Device: **{inputs['inlet_device']}**")
-        dv50_adjusted_display = from_fps(results['dv50_adjusted_fps'], "length")
-        st.write(f"Based on Figure 9 from the article, for an inlet momentum of {rho_v_squared_display:.2f} {momentum_unit} and a '{inputs['inlet_device']}' device, the estimated shift factor is **{results['shift_factor']:.3f}**.")
-        st.write(f"Equation: $d_{{v50, adjusted}} = d_{{v50, original}} \\cdot \\text{{Shift Factor}}$")
-        st.write(f"Calculation (FPS): $d_{{v50, adjusted}} = {results['dv50_original_fps']:.6f} \\text{{ ft}} \\cdot {results['shift_factor']:.3f} = {results['dv50_adjusted_fps']:.6f} \\text{{ ft}}$")
-        st.success(f"**Result:** Adjusted Volume Median Diameter ($d_{{v50}}$) = **{results['dv50_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({dv50_adjusted_display:.6f} {len_unit})")
-
-        st.markdown("---")
-
-        # Step 5: Calculate parameters for Upper-Limit Log Normal Distribution
-        st.markdown("#### Step 5: Calculate Parameters for Upper-Limit Log Normal Distribution")
-        d_max_original_display = from_fps(results['d_max_original_fps'], "length")
-        d_max_adjusted_display = from_fps(results['d_max_adjusted_fps'], "length")
-        st.write(f"Using typical values from the article: $a = {A_DISTRIBUTION}$ and $\\delta = {DELTA_DISTRIBUTION}$.")
-        st.write(f"For **Original** $d_{{v50}}$:")
-        st.write(f"Equation: $d_{{max, original}} = a \\cdot d_{{v50, original}}$")
-        st.write(f"Calculation (FPS): $d_{{max, original}} = {A_DISTRIBUTION} \\cdot {results['dv50_original_fps']:.6f} \\text{{ ft}} = {results['d_max_original_fps']:.6f} \\text{{ ft}}$")
-        st.success(f"**Result:** Maximum Droplet Size (Original $d_{{max}}$) = **{results['d_max_original_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({d_max_original_display:.6f} {len_unit})")
-        st.write(f"For **Adjusted** $d_{{v50}}$:")
-        st.write(f"Equation: $d_{{max, adjusted}} = a \\cdot d_{{v50, adjusted}}$")
-        st.write(f"Calculation (FPS): $d_{{max, adjusted}} = {A_DISTRIBUTION} \\cdot {results['dv50_adjusted_fps']:.6f} \\text{{ ft}} = {results['d_max_adjusted_fps']:.6f} \\text{{ ft}}$")
-        st.success(f"**Result:** Maximum Droplet Size (Adjusted $d_{{max}}$) = **{results['d_max_adjusted_fps'] * FT_TO_MICRON:.2f} {micron_unit_label}** ({d_max_adjusted_display:.6f} {len_unit})")
-
-        st.markdown("---")
-
-        # Step 6: Entrainment Fraction (E) Calculation
-        st.markdown("#### Step 6: Calculate Entrainment Fraction (E)")
-        st.write(f"Gas Velocity (Ug): {inputs['V_g_input']:.2f} {vel_unit}")
-        st.write(f"Liquid Loading (Wl): {inputs['Q_liquid_mass_flow_rate_input']:.2f} {mass_flow_unit}")
-        st.success(f"**Result:** Entrainment Fraction (E) = **{results['E_fraction']:.4f}** (dimensionless)")
-        st.success(f"**Result:** Total Entrained Liquid Mass Flow Rate = **{results['Q_entrained_total_mass_flow_rate_si']:.4f} {mass_flow_unit}**")
-        st.success(f"**Result:** Total Entrained Liquid Volume Flow Rate = **{results['Q_entrained_total_volume_flow_rate_si']:.6f} {vol_flow_unit}**") # New total volume flow
-        st.markdown("---")
-
-        # Step 7: Calculate F-factor and Effective Gas Velocity in Separator
-        st.markdown("#### Step 7: Calculate F-factor and Effective Gas Velocity in Separator")
-        D_pipe_fps = to_fps(inputs['D_input'], "length")
-        L_to_ME_fps = to_fps(inputs['L_to_ME_input'], 'length')
-        L_over_Di = L_to_ME_fps / D_pipe_fps
-        st.write(f"L/Di Ratio (Length from Inlet Device to Mist Extractor / Pipe Inside Diameter): {L_to_ME_fps:.2f} ft / {D_pipe_fps:.2f} ft = {L_over_Di:.2f}")
-        st.write(f"Inlet Device: {inputs['inlet_device']}")
-        st.write(f"Perforated Plate Used: {'Yes' if inputs['perforated_plate_option'] else 'No'}")
-        st.write(f"Calculated F-factor (from Fig. 2): {results['F_factor']:.3f}")
-
-        V_g_effective_separator_display = from_fps(results['V_g_effective_separator_fps'], 'velocity')
-        if inputs['separator_type'] == "Vertical":
-            D_separator_fps = to_fps(inputs['D_separator_input'], 'length')
-            A_pipe_fps = np.pi * (D_pipe_fps / 2)**2
-            A_separator_gas_vertical_fps = np.pi * (D_separator_fps / 2)**2
-            V_g_superficial_separator_fps = (to_fps(inputs['V_g_input'], 'velocity') * A_pipe_fps) / A_separator_gas_vertical_fps
-            st.write(f"Superficial Gas Velocity in Vertical Separator: {from_fps(V_g_superficial_separator_fps, 'velocity'):.2f} {vel_unit}")
-            st.write(f"Equation: $V_{{g,effective}} = V_{{g,superficial}} / F$")
-            st.write(f"Calculation (FPS): $V_{{g,effective}} = {V_g_superficial_separator_fps:.2f} \\text{{ ft/sec}} / {results['F_factor']:.3f} = {results['V_g_effective_separator_fps']:.2f} \\text{{ ft/sec}}$")
-        else: # Horizontal
-            st.write(f"Equation: $V_{{g,effective}} = V_{{g,input}} / F$ (assuming input Vg is superficial in separator gas section)")
-            st.write(f"Calculation (FPS): $V_{{g,effective}} = {to_fps(inputs['V_g_input'], 'velocity'):.2f} \\text{{ ft/sec}} / {results['F_factor']:.3f} = {results['V_g_effective_separator_fps']:.2f} \\text{{ ft/sec}}$")
-        st.success(f"**Result:** Effective Gas Velocity in Separator ($V_{{g,effective}}$) = **{V_g_effective_separator_display:.2f} {vel_unit}**")
-        st.markdown("---")
-
-        # Step 8: Gas Gravity Separation Section Efficiency
-        st.markdown("#### Step 8: Gas Gravity Separation Section Efficiency")
-        st.write(f"Separator Type: **{inputs['separator_type']}**")
-        if inputs['separator_type'] == "Horizontal":
-            st.write(f"Gas Space Height (h_g): {inputs['h_g_input']:.3f} {len_unit}")
-            st.write(f"Effective Separation Length (L_e): {inputs['L_e_input']:.3f} {len_unit}")
-            st.write("For each droplet size, the separation efficiency is calculated based on its terminal velocity and the available settling time/distance.")
-        else: # Vertical
-            st.write(f"Separator Diameter: {inputs['D_separator_input']:.3f} {len_unit}")
-            st.write(f"Gas Gravity Section Height (L_e): {inputs['L_e_input']:.3f} {len_unit}")
-            st.write("For a vertical separator, a droplet is separated if its terminal settling velocity is greater than the effective upward gas velocity.")
-        
-        st.success(f"**Result:** Overall Separation Efficiency of Gas Gravity Section = **{results['gravity_separation_efficiency']:.2%}**")
-        if st.session_state.plot_data_after_gravity:
-            st.success(f"**Result:** Total Entrained Liquid Mass Flow Rate After Gravity Settling = **{st.session_state.plot_data_after_gravity['total_entrained_mass_flow_rate_si']:.4f} {mass_flow_unit}**")
-            st.success(f"**Result:** Total Entrained Liquid Volume Flow Rate After Gravity Settling = **{st.session_state.plot_data_after_gravity['total_entrained_volume_flow_rate_si']:.6f} {vol_flow_unit}**")
-        else:
-            st.warning("Gravity settling results not available. Please check inputs and previous steps.")
-
-        # Display detailed table for gravity separation
-        if st.session_state.plot_data_after_gravity and st.session_state.plot_data_after_gravity['gravity_details_table_data']:
-            st.markdown("##### Detailed Droplet Separation Performance in Gas Gravity Section")
-            gravity_table_df = pd.DataFrame(st.session_state.plot_data_after_gravity['gravity_details_table_data'])
-            
-            # Format columns for display
-            st.dataframe(gravity_table_df.style.format({
-                "dp_microns": "{:.2f}",
-                "Vt_ftps": "{:.4f}",
-                "Cd": "{:.4f}",
-                "Re_p": "{:.2e}", # Scientific notation for Reynolds number
-                "Time Settle (s)": "{:.4f}",
-                "h_max_settle (ft)": "{:.4f}",
-                "Edp": "{:.2%}" # Percentage for efficiency
-            }))
-        else:
-            st.info("Detailed droplet separation data for gravity section not available.")
-
-
-        st.markdown("---")
-
-        # Step 9: Mist Extractor Performance
-        st.markdown("#### Step 9: Mist Extractor Performance")
-        st.write(f"Mist Extractor Type: **{inputs['mist_extractor_type']}**")
-        st.write(f"Operating Pressure: {inputs['pressure_psig_input']:.1f} {pressure_unit}")
-        st.write(f"K-Deration Factor (from Table 3): {results['k_deration_factor']:.3f}")
-
-        if inputs['mist_extractor_type'] == "Mesh Pad":
-            mesh_pad_params_fps = results['mesh_pad_params']
-            st.write(f"  Mesh Pad Type: {inputs['mesh_pad_type']}")
-            st.write(f"  Mesh Pad Thickness: {inputs['mesh_pad_thickness_in']:.2f} {in_unit}")
-            st.write(f"  Wire Diameter: {mesh_pad_params_fps['wire_diameter_in']:.3f} {in_unit}")
-            st.write(f"  Specific Surface Area: {mesh_pad_params_fps['specific_surface_area_ft2_ft3']:.1f} ft²/ft³")
-            st.write(f"  Base K_s: {mesh_pad_params_fps['Ks_ft_sec']:.2f} ft/sec")
-            st.write(f"  Liquid Load Capacity: {mesh_pad_params_fps['liquid_load_gal_min_ft2']:.2f} gal/min/ft²")
-            st.write("  Efficiency calculated using Stokes' number, single-wire efficiency (Fig. 8), and mesh-pad removal efficiency (Eq. 14).")
-
-        elif inputs['mist_extractor_type'] == "Vane-Type":
-            vane_type_params_fps = results['vane_type_params']
-            st.write(f"  Vane Type: {inputs['vane_type']}")
-            st.write(f"  Flow Direction: {inputs['vane_flow_direction']}")
-            st.write(f"  Number of Bends: {inputs['vane_num_bends']}")
-            st.write(f"  Vane Spacing: {inputs['vane_spacing_in']:.2f} {in_unit}")
-            st.write(f"  Bend Angle: {inputs['vane_bend_angle_deg']:.1f} deg")
-            st.write(f"  Base K_s (Upflow): {vane_type_params_fps['Ks_ft_sec_upflow']:.2f} ft/sec")
-            st.write(f"  Base K_s (Horizontal): {vane_type_params_fps['Ks_ft_sec_horizontal']:.2f} ft/sec")
-            st.write(f"  Liquid Load Capacity: {vane_type_params_fps['liquid_load_gal_min_ft2']:.2f} gal/min/ft²")
-            st.write("  Efficiency calculated using Eq. 15.")
-
-        elif inputs['mist_extractor_type'] == "Cyclonic":
-            cyclone_type_params_fps = results['cyclone_type_params']
-            st.write(f"  Cyclone Type: {inputs['cyclone_type']}")
-            st.write(f"  Cyclone Diameter: {inputs['cyclone_diameter_in']:.2f} {in_unit}")
-            st.write(f"  Cyclone Length: {inputs['cyclone_length_in']:.2f} {in_unit}")
-            st.write(f"  Inlet Swirl Angle: {inputs['cyclone_swirl_angle_deg']:.1f} deg")
-            st.write(f"  Base K_s: {cyclone_type_params_fps['Ks_ft_sec_bundle_face_area']:.2f} ft/sec")
-            st.write(f"  Liquid Load Capacity: {cyclone_type_params_fps['liquid_load_gal_min_ft2_bundle_face_area']:.2f} gal/min/ft²")
-            st.write("  Efficiency calculated using Eq. 16.")
-
-        st.success(f"**Result:** Overall Separation Efficiency of Mist Extractor = **{results['mist_extractor_separation_efficiency']:.2%}**")
-        if st.session_state.plot_data_after_mist_extractor:
-            st.success(f"**Result:** Total Entrained Liquid Mass Flow Rate After Mist Extractor = **{st.session_state.plot_data_after_mist_extractor['total_entrained_mass_flow_rate_si']:.4f} {mass_flow_unit}**")
-            st.success(f"**Result:** Total Entrained Liquid Volume Flow Rate After Mist Extractor = **{st.session_state.plot_data_after_mist_extractor['total_entrained_volume_flow_rate_si']:.6f} {vol_flow_unit}**")
-        else:
-            st.warning("Mist extractor results not available. Please check inputs and previous steps.")
-
-        # Display detailed table for mist extractor performance
-        if st.session_state.plot_data_after_mist_extractor and st.session_state.plot_data_after_mist_extractor['mist_extractor_details_table_data']:
-            st.markdown("##### Detailed Droplet Separation Performance in Mist Extractor")
-            mist_extractor_table_df = pd.DataFrame(st.session_state.plot_data_after_mist_extractor['mist_extractor_details_table_data'])
-            
-            # Format columns based on mist extractor type
-            if inputs['mist_extractor_type'] == "Mesh Pad":
-                st.dataframe(mist_extractor_table_df.style.format({
-                    "dp_microns": "{:.2f}",
-                    "Stk": "{:.2e}",
-                    "Ew": "{:.4f}",
-                    "E_pad": "{:.2%}"
-                }))
-            elif inputs['mist_extractor_type'] == "Vane-Type":
-                st.dataframe(mist_extractor_table_df.style.format({
-                    "dp_microns": "{:.2f}",
-                    "E_vane": "{:.2%}"
-                }))
-            elif inputs['mist_extractor_type'] == "Cyclonic":
-                st.dataframe(mist_extractor_table_df.style.format({
-                    "dp_microns": "{:.2f}",
-                    "Stk_cycl": "{:.2e}",
-                    "E_cycl": "{:.2%}"
-                }))
-        else:
-            st.info("Detailed droplet separation data for mist extractor not available.")
-
-        st.markdown("---")
-        st.subheader("Final Carry-Over from Separator Outlet")
-        if st.session_state.plot_data_after_mist_extractor:
-            st.success(f"**Total Carry-Over Mass Flow Rate:** **{st.session_state.plot_data_after_mist_extractor['total_entrained_mass_flow_rate_si']:.4f} {mass_flow_unit}**")
-            st.success(f"**Total Carry-Over Volume Flow Rate:** **{st.session_state.plot_data_after_mist_extractor['total_entrained_volume_flow_rate_si']:.6f} {vol_flow_unit}**")
-        else:
-            st.warning("Final carry-over results not available. Please ensure all previous steps are calculated.")
-
-    else:
-        st.warning("Please go to the 'Input Parameters' page and modify inputs to trigger calculations.")
-
-# --- Page: Droplet Distribution Results ---
-elif page == "Droplet Distribution Results":
-    st.header("3. Particle Size Distribution Plot")
-
-    # Moved the input for num_points_distribution here
-    st.subheader("Distribution Plot Settings")
-    st.session_state.inputs['num_points_distribution'] = st.number_input(
-        "Number of Points for Distribution Plot/Table",
-        min_value=10,
-        max_value=100,
-        value=st.session_state.inputs['num_points_distribution'],
-        step=5,
-        key='num_points_distribution_input',
-        help="Adjust the number of data points used to generate the droplet size distribution curve and table (10-100)."
-    )
-    st.markdown("---") # Add a separator after the input
-
-    # Recalculate plot_data specifically on this page after num_points_distribution is updated
-    # Ensure calculation_results are available before proceeding
-    if st.session_state.calculation_results:
-        try:
-            results = st.session_state.calculation_results
-            inputs = st.session_state.inputs
-            num_points = inputs['num_points_distribution']
-            
-            # Ensure required inputs for distribution generation are available
-            if 'Q_liquid_mass_flow_rate_input' in inputs and \
-               inputs['Q_liquid_mass_flow_rate_input'] is not None and \
-               'rho_l_input' in inputs and \
-               inputs['rho_l_input'] is not None:
-
-                # Generate initial distribution (after inlet device, before gravity settling)
-                st.session_state.plot_data_original = _generate_initial_distribution_data(
-                    results['dv50_original_fps'],
-                    results['d_max_original_fps'],
-                    num_points,
-                    results['E_fraction'],
-                    inputs['Q_liquid_mass_flow_rate_input'],
-                    inputs['rho_l_input']
-                )
-
-                st.session_state.plot_data_adjusted = _generate_initial_distribution_data(
-                    results['dv50_adjusted_fps'],
-                    results.get('d_max_adjusted_fps', results['d_max_original_fps']), # Use original if adjusted not present
-                    num_points,
-                    results['E_fraction'],
-                    inputs['Q_liquid_mass_flow_rate_input'],
-                    inputs['rho_l_input']
-                )
-
-                # Calculate and apply gravity settling
-                if inputs['separator_type'] == "Horizontal":
-                    st.session_state.plot_data_after_gravity = _calculate_and_apply_separation(
-                        st.session_state.plot_data_adjusted, # Input is the adjusted distribution
-                        separation_stage_efficiency_func=gravity_efficiency_func_horizontal,
-                        is_gravity_stage=True,
-                        V_g_eff_sep_fps=st.session_state.calculation_results['V_g_effective_separator_fps'],
-                        h_g_sep_fps=to_fps(inputs['h_g_input'], 'length'),
-                        L_e_sep_fps=to_fps(inputs['L_e_input'], 'length'),
-                        rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
-                        rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                        mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
-                        separator_type=inputs['separator_type']
-                    )
-                else: # Vertical
-                    st.session_state.plot_data_after_gravity = _calculate_and_apply_separation(
-                        st.session_state.plot_data_adjusted, # Input is the adjusted distribution
-                        separation_stage_efficiency_func=gravity_efficiency_func_vertical,
-                        is_gravity_stage=True,
-                        V_g_eff_sep_fps=st.session_state.calculation_results['V_g_effective_separator_fps'],
-                        # For vertical, h_g_input is effectively L_e_input for gravity calculations
-                        h_g_sep_fps=to_fps(inputs['L_e_input'], 'length'), 
-                        L_e_sep_fps=to_fps(inputs['L_e_input'], 'length'), # Pass L_e_input for vertical time_settle calc
-                        rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
-                        rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                        mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
-                        separator_type=inputs['separator_type']
-                    )
-                
-                # Update the overall gravity separation efficiency in results for reporting
-                if st.session_state.plot_data_after_gravity:
-                    st.session_state.calculation_results['gravity_separation_efficiency'] = st.session_state.plot_data_after_gravity['overall_separation_efficiency']
-                else:
-                    st.session_state.calculation_results['gravity_separation_efficiency'] = 0.0
-
-                # Calculate and apply mist extractor efficiency
-                if st.session_state.plot_data_after_gravity and st.session_state.plot_data_after_gravity['dp_values_ft'].size > 0:
-                    if st.session_state.inputs['mist_extractor_type'] == "Mesh Pad":
-                        mesh_pad_params = MESH_PAD_PARAMETERS[st.session_state.inputs['mesh_pad_type']]
-                        mesh_pad_params_with_user_thickness = mesh_pad_params.copy()
-                        mesh_pad_params_with_user_thickness["thickness_in"] = st.session_state.inputs['mesh_pad_thickness_in']
-                        
-                        st.session_state.plot_data_after_mist_extractor = _calculate_and_apply_separation(
-                            st.session_state.plot_data_after_gravity,
-                            separation_stage_efficiency_func=mesh_pad_efficiency_func,
-                            V_g_eff_sep_fps=st.session_state.calculation_results['V_g_effective_separator_fps'],
-                            rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
-                            rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                            mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
-                            mist_extractor_type_str="Mesh Pad", # Pass the type string
-                            mesh_pad_type_params_fps=mesh_pad_params_with_user_thickness
-                        )
-                    elif st.session_state.inputs['mist_extractor_type'] == "Vane-Type":
-                        vane_type_params = VANE_PACK_PARAMETERS[st.session_state.inputs['vane_type']]
-                        vane_type_params_with_user_inputs = vane_type_params.copy()
-                        vane_type_params_with_user_inputs["flow_direction"] = st.session_state.inputs['vane_flow_direction']
-                        vane_type_params_with_user_inputs["number_of_bends"] = st.session_state.inputs['vane_num_bends']
-                        vane_type_params_with_user_inputs["vane_spacing_in"] = st.session_state.inputs['vane_spacing_in']
-                        vane_type_params_with_user_inputs["bend_angle_degree"] = st.session_state.inputs['vane_bend_angle_deg']
-
-                        st.session_state.plot_data_after_mist_extractor = _calculate_and_apply_separation(
-                            st.session_state.plot_data_after_gravity,
-                            separation_stage_efficiency_func=vane_type_efficiency_func,
-                            V_g_eff_sep_fps=st.session_state.calculation_results['V_g_effective_separator_fps'],
-                            rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
-                            rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                            mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
-                            mist_extractor_type_str="Vane-Type", # Pass the type string
-                            vane_type_params_fps=vane_type_params_with_user_inputs
-                        )
-                    elif st.session_state.inputs['mist_extractor_type'] == "Cyclonic":
-                        cyclone_type_params = CYCLONE_PARAMETERS[st.session_state.inputs['cyclone_type']]
-                        cyclone_type_params_with_user_inputs = cyclone_type_params.copy()
-                        cyclone_type_params_with_user_inputs["cyclone_inside_diameter_in"] = st.session_state.inputs['cyclone_diameter_in']
-                        cyclone_type_params_with_user_inputs["cyclone_length_in"] = st.session_state.inputs['cyclone_length_in']
-                        cyclone_type_params_with_user_inputs["inlet_swirl_angle_deg"] = st.session_state.inputs['cyclone_swirl_angle_deg']
-
-                        st.session_state.plot_data_after_mist_extractor = _calculate_and_apply_separation(
-                            st.session_state.plot_data_after_gravity,
-                            separation_stage_efficiency_func=demisting_cyclone_efficiency_func,
-                            V_g_eff_sep_fps=st.session_state.calculation_results['V_g_effective_separator_fps'],
-                            rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
-                            rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                            mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
-                            mist_extractor_type_str="Cyclonic", # Pass the type string
-                            cyclone_type_params_fps=cyclone_type_params_with_user_inputs
-                        )
-                    else:
-                        st.session_state.plot_data_after_mist_extractor = st.session_state.plot_data_after_gravity # No mist extractor selected, so no change
-                    
-                    # Update the overall mist extractor separation efficiency in results for reporting
-                    if st.session_state.plot_data_after_mist_extractor:
-                        st.session_state.calculation_results['mist_extractor_separation_efficiency'] = st.session_state.plot_data_after_mist_extractor['overall_separation_efficiency']
-                    else:
-                        st.session_state.calculation_results['mist_extractor_separation_efficiency'] = 0.0
-                else:
-                    st.session_state.plot_data_after_mist_extractor = None # No gravity data, so no mist extractor data either
+            st.session_state.plot_data_after_mist_extractor = None # No gravity data, so no mist extractor data either
 
             else:
                 st.warning("Required liquid flow rate or density inputs are missing in session state. Please check 'Input Parameters' page.")
