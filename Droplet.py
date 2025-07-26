@@ -242,9 +242,10 @@ def calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps, g_fps=32
     based on Eq. 2, Eq. 3, and Figure 6 (Cd vs Re_p).
     All inputs and outputs are in FPS units.
     g_fps: acceleration due to gravity in ft/s^2
+    Returns: Vt_new, Cd, Re_p
     """
     if rho_g_fps == 0 or mu_g_fps == 0 or (rho_l_fps - rho_g_fps) <= 0:
-        return 0.0 # Prevent division by zero or non-physical density difference
+        return 0.0, 0.0, 0.0 # Prevent division by zero or non-physical density difference
 
     # Initial guess for Vt (e.g., using Stokes' Law for small droplets)
     # This initial guess helps the iteration converge faster for typical values.
@@ -257,6 +258,9 @@ def calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps, g_fps=32
     Vt_current = Vt_guess
     tolerance = 1e-6
     max_iterations = 100
+    
+    Re_p = 0.0
+    Cd = 0.0
 
     for _ in range(max_iterations):
         if Vt_current <= 0 or dp_fps <= 0: # Handle cases where velocity or diameter is zero/negative
@@ -280,13 +284,13 @@ def calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps, g_fps=32
             Vt_new = arg_sqrt**0.5
         
         if abs(Vt_new - Vt_current) < tolerance:
-            return Vt_new
+            return Vt_new, Cd, Re_p
         
         Vt_current = Vt_new
     
     # If max_iterations reached without convergence, return the last calculated value and warn
     st.warning(f"Terminal velocity calculation did not converge for dp={dp_fps*FT_TO_MICRON:.2f} um after {max_iterations} iterations. Returning last value: {Vt_current:.6f} ft/s.")
-    return Vt_current
+    return Vt_current, Cd, Re_p
 
 
 # Figure 2: F, Actual Velocity/Average (Plug Flow) Velocity vs. L/Di (digitized from plot)
@@ -528,7 +532,7 @@ def demisting_cyclone_efficiency_func(dp_fps, V_g_eff_sep_fps, rho_l_fps, rho_g_
     if np.tan(inlet_swirl_angle_rad) == 0:
         return 0.0 # No swirl, no separation
     
-    exponent = -8 * Stk_cycl * (Lcycl_fps / (Dcycl_fps * np.tan(inlet_swirl_angle_rad)))
+    exponent = -8 * Stk_cycl * (Lcycl_fps / (Dcycl_fps * np.tan(in_swirl_angle_rad)))
     E_cycl = 1 - np.exp(exponent)
 
     return max(0.0, min(1.0, E_cycl)) # Ensure efficiency is between 0 and 1
@@ -1091,11 +1095,17 @@ def _generate_initial_distribution_data(dv50_value_fps, d_max_value_fps, num_poi
 def _calculate_and_apply_separation(
     initial_plot_data,
     separation_stage_efficiency_func=None, # Function to apply for separation
+    is_gravity_stage=False, # Flag to indicate if this is the gravity separation stage
+    V_g_eff_sep_fps=0.0, # Required for gravity and mist extractor
+    rho_l_fps=0.0, rho_g_fps=0.0, mu_g_fps=0.0, # Required for terminal velocity calc
+    h_g_sep_fps=0.0, L_e_sep_fps=0.0, # Required for horizontal gravity
+    separator_type="Horizontal", # Required for gravity
     **kwargs_for_efficiency_func # Arguments for the efficiency function
 ):
     """
     Applies a separation efficiency function to an existing droplet distribution
     and calculates the new entrained mass/volume flow rates.
+    If is_gravity_stage is True, it also collects detailed per-droplet data.
     """
     if not initial_plot_data or not initial_plot_data['dp_values_ft'].size > 0:
         return {
@@ -1107,7 +1117,8 @@ def _calculate_and_apply_separation(
             'entrained_volume_flow_rate_per_dp': np.array([]),
             'total_entrained_mass_flow_rate_si': 0.0,
             'total_entrained_volume_flow_rate_si': 0.0,
-            'overall_separation_efficiency': 0.0
+            'overall_separation_efficiency': 0.0,
+            'gravity_details_table_data': [] # Added for detailed gravity data
         }
 
     dp_values_ft = initial_plot_data['dp_values_ft']
@@ -1122,11 +1133,67 @@ def _calculate_and_apply_separation(
     initial_total_entrained_mass_flow_rate_si = np.sum(initial_entrained_mass_flow_rate_per_dp)
     initial_total_entrained_volume_flow_rate_si = np.sum(initial_entrained_volume_flow_rate_per_dp)
 
+    gravity_details_table_data = [] # To store details for Step 8 table
+
     # Apply separation efficiency for each droplet size
     for i, dp in enumerate(dp_values_ft):
+        efficiency = 0.0
+        Vt = 0.0
+        Cd = 0.0
+        Re_p = 0.0
+        flow_regime = "N/A"
+        time_settle = 0.0 # Time for droplet to fall h_g or L_e
+        h_max_settle = 0.0 # Max height droplet can fall in gas residence time (horizontal) or effective separation height (vertical)
+
         if separation_stage_efficiency_func:
-            # Pass dp in appropriate units (FPS for internal calculations)
-            efficiency = separation_stage_efficiency_func(dp_fps=dp, **kwargs_for_efficiency_func)
+            # For gravity stage, we need more detailed returns from the efficiency function
+            if is_gravity_stage:
+                if separator_type == "Horizontal":
+                    efficiency, Vt, Cd, Re_p, h_max_settle_calc = gravity_efficiency_func_horizontal(
+                        dp_fps=dp, V_g_eff_sep_fps=V_g_eff_sep_fps, h_g_sep_fps=h_g_sep_fps,
+                        L_e_sep_fps=L_e_sep_fps, rho_l_fps=rho_l_fps, rho_g_fps=rho_g_fps, mu_g_fps=mu_g_fps
+                    )
+                    # Time for droplet to fall h_g
+                    if Vt > 1e-9: # Avoid division by zero
+                        time_settle = h_g_sep_fps / Vt
+                    else:
+                        time_settle = float('inf')
+                    h_max_settle = h_max_settle_calc # This is the h_max_settle calculated within the function
+                else: # Vertical
+                    efficiency, Vt, Cd, Re_p = gravity_efficiency_func_vertical(
+                        dp_fps=dp, V_g_eff_sep_fps=V_g_eff_sep_fps, rho_l_fps=rho_l_fps,
+                        rho_g_fps=rho_g_fps, mu_g_fps=mu_g_fps
+                    )
+                    # For vertical, h_max_settle is effectively the height of the gas gravity section if separated
+                    # Time for droplet to fall L_e (gas gravity section height)
+                    if Vt > 1e-9:
+                        time_settle = L_e_sep_fps / Vt
+                    else:
+                        time_settle = float('inf')
+                    h_max_settle = L_e_sep_fps if efficiency > 0 else 0.0 # If separated, it effectively settles through L_e
+                
+                # Determine flow regime
+                if Re_p < 2:
+                    flow_regime = "Stokes'"
+                elif 2 <= Re_p <= 500:
+                    flow_regime = "Intermediate"
+                else:
+                    flow_regime = "Newton's"
+
+                gravity_details_table_data.append({
+                    "dp_microns": dp * FT_TO_MICRON,
+                    "Vt_ftps": Vt,
+                    "Cd": Cd,
+                    "Re_p": Re_p,
+                    "Flow Regime": flow_regime,
+                    "Time Settle (s)": time_settle,
+                    "h_max_settle (ft)": h_max_settle,
+                    "Edp": efficiency # Individual droplet efficiency
+                })
+
+            else: # For mist extractor stage (no extra details needed for table)
+                efficiency = separation_stage_efficiency_func(dp_fps=dp, **kwargs_for_efficiency_func)
+            
             # Ensure efficiency is between 0 and 1
             efficiency = max(0.0, min(1.0, efficiency))
             
@@ -1164,7 +1231,8 @@ def _calculate_and_apply_separation(
         'entrained_volume_flow_rate_per_dp': separated_entrained_volume_flow_rate_per_dp,
         'total_entrained_mass_flow_rate_si': final_total_entrained_mass_flow_rate_si,
         'total_entrained_volume_flow_rate_si': final_total_entrained_volume_flow_rate_si,
-        'overall_separation_efficiency': overall_separation_efficiency
+        'overall_separation_efficiency': overall_separation_efficiency,
+        'gravity_details_table_data': gravity_details_table_data # Include detailed data for gravity stage
     }
 
 
@@ -1173,30 +1241,39 @@ def gravity_efficiency_func_horizontal(dp_fps, V_g_eff_sep_fps, h_g_sep_fps, L_e
     """
     Calculates separation efficiency for a horizontal separator's gas gravity section.
     Assumes uniform droplet release over h_g.
+    Returns: efficiency, Vt, Cd, Re_p, h_max_settle
     """
     if V_g_eff_sep_fps <= 0 or h_g_sep_fps <= 0 or L_e_sep_fps <= 0:
-        return 0.0 # No separation if no gas flow or no settling height/length
+        return 0.0, 0.0, 0.0, 0.0, 0.0 # No separation if no gas flow or no settling height/length
 
-    V_t = calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps)
+    V_t, Cd, Re_p = calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps)
     
     # Calculate maximum height from which a droplet can settle
-    h_max_settle = (V_t * L_e_sep_fps) / V_g_eff_sep_fps
-    
+    if V_g_eff_sep_fps > 1e-9: # Avoid division by near zero
+        h_max_settle = (V_t * L_e_sep_fps) / V_g_eff_sep_fps
+    else:
+        h_max_settle = float('inf') # If gas velocity is zero, droplet can settle from infinite height
+
     # Efficiency is the fraction of h_g from which droplets of this size will settle
     efficiency = min(1.0, h_max_settle / h_g_sep_fps)
-    return efficiency
+    return efficiency, V_t, Cd, Re_p, h_max_settle
 
 def gravity_efficiency_func_vertical(dp_fps, V_g_eff_sep_fps, rho_l_fps, rho_g_fps, mu_g_fps):
     """
     Calculates separation efficiency for a vertical separator's gas gravity section.
     Sharp cutoff: 100% if Vt > V_g_eff_sep, 0% otherwise.
+    Returns: efficiency, Vt, Cd, Re_p
     """
-    V_t = calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps)
+    V_t, Cd, Re_p = calculate_terminal_velocity(dp_fps, rho_l_fps, rho_g_fps, mu_g_fps)
     
     if V_t > V_g_eff_sep_fps:
-        return 1.0 # Droplet settles
+        efficiency = 1.0 # Droplet settles
     else:
-        return 0.0 # Droplet is carried over
+        efficiency = 0.0 # Droplet is carried over
+    
+    # For vertical, h_max_settle is conceptually the entire gravity section height if it settles
+    # We'll handle this detail in the _calculate_and_apply_separation function for table consistency
+    return efficiency, V_t, Cd, Re_p
 
 
 # --- Function to perform all main calculations ---
@@ -1627,21 +1704,28 @@ if page == "Input Parameters":
             st.session_state.plot_data_after_gravity = _calculate_and_apply_separation(
                 st.session_state.plot_data_adjusted, # Input is the adjusted distribution
                 separation_stage_efficiency_func=gravity_efficiency_func_horizontal,
+                is_gravity_stage=True,
                 V_g_eff_sep_fps=st.session_state.calculation_results['V_g_effective_separator_fps'],
                 h_g_sep_fps=to_fps(st.session_state.inputs['h_g_input'], 'length'),
                 L_e_sep_fps=to_fps(st.session_state.inputs['L_e_input'], 'length'),
                 rho_l_fps=to_fps(st.session_state.inputs['rho_l_input'], 'density'),
                 rho_g_fps=to_fps(st.session_state.inputs['rho_g_input'], 'density'),
-                mu_g_fps=to_fps(st.session_state.inputs['mu_g_input'], 'viscosity')
+                mu_g_fps=to_fps(st.session_state.inputs['mu_g_input'], 'viscosity'),
+                separator_type=st.session_state.inputs['separator_type']
             )
         else: # Vertical
             st.session_state.plot_data_after_gravity = _calculate_and_apply_separation(
                 st.session_state.plot_data_adjusted, # Input is the adjusted distribution
                 separation_stage_efficiency_func=gravity_efficiency_func_vertical,
+                is_gravity_stage=True,
                 V_g_eff_sep_fps=st.session_state.calculation_results['V_g_effective_separator_fps'],
+                # For vertical, h_g_input is effectively L_e_input for gravity calculations
+                h_g_sep_fps=to_fps(st.session_state.inputs['L_e_input'], 'length'), 
+                L_e_sep_fps=to_fps(st.session_state.inputs['L_e_input'], 'length'), # Pass L_e_input for vertical time_settle calc
                 rho_l_fps=to_fps(st.session_state.inputs['rho_l_input'], 'density'),
                 rho_g_fps=to_fps(st.session_state.inputs['rho_g_input'], 'density'),
-                mu_g_fps=to_fps(st.session_state.inputs['mu_g_input'], 'viscosity')
+                mu_g_fps=to_fps(st.session_state.inputs['mu_g_input'], 'viscosity'),
+                separator_type=st.session_state.inputs['separator_type']
             )
         
         # Update the overall gravity separation efficiency in results for reporting
@@ -1897,6 +1981,25 @@ elif page == "Calculation Steps":
         else:
             st.warning("Gravity settling results not available. Please check inputs and previous steps.")
 
+        # Display detailed table for gravity separation
+        if st.session_state.plot_data_after_gravity and st.session_state.plot_data_after_gravity['gravity_details_table_data']:
+            st.markdown("##### Detailed Droplet Separation Performance in Gas Gravity Section")
+            gravity_table_df = pd.DataFrame(st.session_state.plot_data_after_gravity['gravity_details_table_data'])
+            
+            # Format columns for display
+            st.dataframe(gravity_table_df.style.format({
+                "dp_microns": "{:.2f}",
+                "Vt_ftps": "{:.4f}",
+                "Cd": "{:.4f}",
+                "Re_p": "{:.2e}", # Scientific notation for Reynolds number
+                "Time Settle (s)": "{:.4f}",
+                "h_max_settle (ft)": "{:.4f}",
+                "Edp": "{:.2%}" # Percentage for efficiency
+            }))
+        else:
+            st.info("Detailed droplet separation data for gravity section not available.")
+
+
         st.markdown("---")
 
         # Step 9: Mist Extractor Performance
@@ -1998,7 +2101,7 @@ elif page == "Droplet Distribution Results":
 
                 st.session_state.plot_data_adjusted = _generate_initial_distribution_data(
                     results['dv50_adjusted_fps'],
-                    results['d_max_adjusted_fps'],
+                    results.get('d_max_adjusted_fps', results['d_max_original_fps']), # Use original if adjusted not present
                     num_points,
                     results['E_fraction'],
                     inputs['Q_liquid_mass_flow_rate_input'],
@@ -2010,21 +2113,28 @@ elif page == "Droplet Distribution Results":
                     st.session_state.plot_data_after_gravity = _calculate_and_apply_separation(
                         st.session_state.plot_data_adjusted, # Input is the adjusted distribution
                         separation_stage_efficiency_func=gravity_efficiency_func_horizontal,
+                        is_gravity_stage=True,
                         V_g_eff_sep_fps=results['V_g_effective_separator_fps'],
                         h_g_sep_fps=to_fps(inputs['h_g_input'], 'length'),
                         L_e_sep_fps=to_fps(inputs['L_e_input'], 'length'),
                         rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
                         rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                        mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity')
+                        mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
+                        separator_type=inputs['separator_type']
                     )
                 else: # Vertical
                     st.session_state.plot_data_after_gravity = _calculate_and_apply_separation(
                         st.session_state.plot_data_adjusted, # Input is the adjusted distribution
                         separation_stage_efficiency_func=gravity_efficiency_func_vertical,
+                        is_gravity_stage=True,
                         V_g_eff_sep_fps=results['V_g_effective_separator_fps'],
+                        # For vertical, h_g_input is effectively L_e_input for gravity calculations
+                        h_g_sep_fps=to_fps(inputs['L_e_input'], 'length'), 
+                        L_e_sep_fps=to_fps(inputs['L_e_input'], 'length'), # Pass L_e_input for vertical time_settle calc
                         rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
                         rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                        mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity')
+                        mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
+                        separator_type=inputs['separator_type']
                     )
                 
                 # Update the overall gravity separation efficiency in results for reporting
@@ -2062,8 +2172,8 @@ elif page == "Droplet Distribution Results":
                             separation_stage_efficiency_func=vane_type_efficiency_func,
                             V_g_eff_sep_fps=results['V_g_effective_separator_fps'],
                             rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
-                            rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                            mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
+                            rho_g_fps=to_fps(inputs.get('rho_g_input', 0.0), 'density'), # Use .get with default for robustness
+                            mu_g_fps=to_fps(inputs.get('mu_g_input', 0.0), 'viscosity'), # Use .get with default for robustness
                             vane_type_params_fps=vane_type_params_with_user_inputs
                         )
                     elif st.session_state.inputs['mist_extractor_type'] == "Cyclonic":
@@ -2078,8 +2188,8 @@ elif page == "Droplet Distribution Results":
                             separation_stage_efficiency_func=demisting_cyclone_efficiency_func,
                             V_g_eff_sep_fps=results['V_g_effective_separator_fps'],
                             rho_l_fps=to_fps(inputs['rho_l_input'], 'density'),
-                            rho_g_fps=to_fps(inputs['rho_g_input'], 'density'),
-                            mu_g_fps=to_fps(inputs['mu_g_input'], 'viscosity'),
+                            rho_g_fps=to_fps(inputs.get('rho_g_input', 0.0), 'density'), # Use .get with default for robustness
+                            mu_g_fps=to_fps(inputs.get('mu_g_input', 0.0), 'viscosity'), # Use .get with default for robustness
                             cyclone_type_params_fps=cyclone_type_params_with_user_inputs
                         )
                     else:
