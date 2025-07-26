@@ -1389,8 +1389,13 @@ if page == "Input Parameters":
             st.session_state.plot_data_after_mist_extractor = None # No gravity data, so no mist extractor data either
 
 
-    else:
-        st.warning("Please go to the 'Input Parameters' page and modify inputs to trigger calculations and generate the plot data.")
+    except Exception as e:
+        st.error(f"An error occurred during calculations: {e}")
+        st.session_state.calculation_results = None # Reset results on error
+        st.session_state.plot_data_original = None
+        st.session_state.plot_data_adjusted = None
+        st.session_state.plot_data_after_gravity = None
+        st.session_state.plot_data_after_mist_extractor = None
 
 
     if st.session_state.plot_data_original and st.session_state.plot_data_adjusted and st.session_state.plot_data_after_gravity and st.session_state.plot_data_after_mist_extractor:
