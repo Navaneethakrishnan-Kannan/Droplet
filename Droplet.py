@@ -437,7 +437,7 @@ def calculate_single_wire_efficiency(Stk):
     """Calculates single-wire impaction efficiency using Eq. 13."""
     if Stk <= 0: # Handle Stk=0 or negative to avoid math domain errors
         return 0.0
-    numerator = -0.105 + 0.995 * (Stk**0.0493)
+    numerator = -0.105 + 0.995 * (Stk**1.00493)
     denominator = 0.6261 + (Stk**1.00493)
     if denominator == 0: # Avoid division by zero
         return 0.0
@@ -537,6 +537,39 @@ def demisting_cyclone_efficiency_func(dp_fps, V_g_eff_sep_fps, rho_l_fps, rho_g_
 
     return max(0.0, min(1.0, E_cycl)) # Ensure efficiency is between 0 and 1
 
+
+
+def adjust_ks_for_pressure_and_liquid_load(mesh_pad_type, pressure_psig, liquid_load_actual, mesh_pad_params):
+    """Applies pressure-based Ks deration and further reduction for liquid load exceedance."""
+    ks_design = mesh_pad_params["Ks_ft_sec"]
+    ks_deration = get_k_deration_factor(pressure_psig)
+    ks_corrected = ks_design * ks_deration
+
+    liquid_load_limit = mesh_pad_params["liquid_load_gal_min_ft2"]
+    if liquid_load_actual > liquid_load_limit:
+        excess = liquid_load_actual - liquid_load_limit
+        reduction_factor = 1 - 0.10 * excess  # 10% per gpm/ft2 exceeded
+        ks_corrected *= max(reduction_factor, 0.0)  # prevent negative Ks
+
+    return ks_corrected, ks_deration, ks_corrected / ks_design
+
+def calculate_stk_ew_epad_for_distribution(dp_fps_list, V_g_eff_sep_fps, rho_l_fps, rho_g_fps, mu_g_fps, mesh_pad_params_fps):
+    """Returns a list of [dp_micron, Stk, Ew, Epad] for each droplet size."""
+    Dw_fps = mesh_pad_params_fps["wire_diameter_in"] * IN_TO_FT
+    pad_thickness_fps = mesh_pad_params_fps["thickness_in"] * IN_TO_FT
+    specific_surface_area_fps = mesh_pad_params_fps["specific_surface_area_ft2_ft3"]
+
+    results = []
+    for dp in dp_fps_list:
+        if dp <= 0 or V_g_eff_sep_fps <= 0 or mu_g_fps <= 0 or Dw_fps <= 0:
+            results.append([dp * FT_TO_MICRON, 0.0, 0.0, 0.0])
+            continue
+        Stk = ((rho_l_fps - rho_g_fps) * dp**2 * V_g_eff_sep_fps) / (18 * mu_g_fps * Dw_fps)
+        Ew = calculate_single_wire_efficiency(Stk)
+        exponent = -0.0238 * specific_surface_area_fps * pad_thickness_fps * Ew
+        Epad = 1 - np.exp(exponent)
+        results.append([dp * FT_TO_MICRON, Stk, Ew, Epad])
+    return results
 
 # --- PDF Report Generation Function ---
 class PDF(FPDF):
