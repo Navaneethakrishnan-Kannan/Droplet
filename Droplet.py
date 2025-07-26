@@ -438,7 +438,7 @@ def calculate_single_wire_efficiency(Stk):
     """Calculates single-wire impaction efficiency using Eq. 13."""
     if Stk <= 0: # Handle Stk=0 or negative to avoid math domain errors
         return 0.0
-    numerator = -0.105 + 0.995 * (Stk**0.0493)
+    numerator = -0.105 + 0.995 * (Stk**1.00493)
     denominator = 0.6261 + (Stk**1.00493)
     if denominator == 0: # Avoid division by zero
         return 0.0
