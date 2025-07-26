@@ -516,7 +516,7 @@ def demisting_cyclone_efficiency_func(dp_fps, V_g_eff_sep_fps, rho_l_fps, rho_g_
 
     Dcycl_fps = cyclone_type_params_fps["cyclone_inside_diameter_in"] * IN_TO_FT
     Lcycl_fps = cyclone_type_params_fps["cyclone_length_in"] * IN_TO_FT
-    inlet_swirl_angle_rad = np.deg2rad(cyclone_type_params_fps["inlet_swirl_angle_degree"])
+    in_swirl_angle_rad = np.deg2rad(cyclone_type_params_fps["inlet_swirl_angle_degree"])
 
     # Eq. 16: Stk_cycl = ( (rho_l - rho_g) * dp^2 * Vg_cycl ) / (18 * mu_g * Dcycl)
     # Vg_cycl is superficial gas velocity through a single cyclone tube.
@@ -529,7 +529,7 @@ def demisting_cyclone_efficiency_func(dp_fps, V_g_eff_sep_fps, rho_l_fps, rho_g_
 
     # Eq. 16: E_cycl = 1 - exp[ -8 * Stk_cycl * (Lcycl / (Dcycl * tan(alpha))) ]
     # Ensure tan(alpha) is not zero or near zero for 90 degree swirl angle etc.
-    if np.tan(inlet_swirl_angle_rad) == 0:
+    if np.tan(in_swirl_angle_rad) == 0:
         return 0.0 # No swirl, no separation
     
     exponent = -8 * Stk_cycl * (Lcycl_fps / (Dcycl_fps * np.tan(in_swirl_angle_rad)))
@@ -1192,7 +1192,15 @@ def _calculate_and_apply_separation(
                 })
 
             else: # For mist extractor stage (no extra details needed for table)
-                efficiency = separation_stage_efficiency_func(dp_fps=dp, **kwargs_for_efficiency_func)
+                # FIX: Pass all required arguments for mist extractor efficiency functions
+                efficiency = separation_stage_efficiency_func(
+                    dp_fps=dp,
+                    V_g_eff_sep_fps=V_g_eff_sep_fps,
+                    rho_l_fps=rho_l_fps,
+                    rho_g_fps=rho_g_fps,
+                    mu_g_fps=mu_g_fps,
+                    **kwargs_for_efficiency_func
+                )
             
             # Ensure efficiency is between 0 and 1
             efficiency = max(0.0, min(1.0, efficiency))
@@ -1547,7 +1555,7 @@ if page == "Input Parameters":
             key='sigma_custom_input',
             help=tooltip_text # Use the constructed tooltip text here
         )
-        # Update sigma_fps based on the new sigma_custom value
+        # Update sigma_fps based on the new default sigma_custom
         st.session_state.inputs['sigma_fps'] = to_fps(st.session_state.inputs['sigma_custom'], "surface_tension")
         
         st.info(f"**Current Liquid Surface Tension:** {st.session_state.inputs['sigma_custom']:.3f} {surf_tens_input_unit}")
@@ -1845,7 +1853,7 @@ elif page == "Calculation Steps":
             st.write(f"Effective Separation Length (Le): {inputs['L_e_input']:.3f} {len_unit}")
         else: # Vertical
             st.write(f"Separator Diameter: {inputs['D_separator_input']:.3f} {len_unit}")
-            st.write(f"Gas Gravity Section Height (Le): {inputs['L_e_input']:.3f} {len_unit}")
+            st.write(f"Gas Gravity Section Height (L_e): {inputs['L_e_input']:.3f} {len_unit}")
         st.write(f"Length from Inlet Device to Mist Extractor (L_to_ME): {inputs['L_to_ME_input']:.3f} {len_unit}")
         st.write(f"Perforated Plate Used: {'Yes' if inputs['perforated_plate_option'] else 'No'}")
         st.write(f"Mist Extractor Type: {inputs['mist_extractor_type']}")
