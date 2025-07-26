@@ -2113,21 +2113,21 @@ elif page == "Droplet Distribution Results":
         plt.close(fig_after_me) # Close the plot to free memory
 
 
-        st.download_button(
-            label="Download Report as PDF",
-            data=generate_pdf_report(
-                st.session_state.inputs,
-                st.session_state.calculation_results,
-                buf_original,
-                buf_adjusted,
-                plot_data_original,
-                plot_data_adjusted,
-                plot_data_after_gravity,
-                plot_data_after_mist_extractor
-            ),
-            file_name="Droplet_Distribution_Report.pdf",
-            mime="application/pdf"
-        )
+        #st.download_button(
+         #   label="Download Report as PDF",
+          #  data=generate_pdf_report(
+             #   st.session_state.inputs,
+           #     st.session_state.calculation_results,
+            #    buf_original,
+              #  buf_adjusted,
+              #  plot_data_original,
+              #  plot_data_adjusted,
+              #  plot_data_after_gravity,
+              #  plot_data_after_mist_extractor
+          #  ),
+           # file_name="Droplet_Distribution_Report.pdf",
+            #mime="application/pdf"
+        #)
     else:
         st.warning("Please go to the 'Input Parameters' page and modify inputs to trigger calculations and generate the plot data.")
 
