@@ -438,6 +438,7 @@ def calculate_single_wire_efficiency(Stk):
     """Calculates single-wire impaction efficiency using Eq. 13."""
     if Stk <= 0: # Handle Stk=0 or negative to avoid math domain errors
         return 0.0
+    # Corrected numerator as per user request
     numerator = -0.105 + 0.995 * (Stk**1.00493)
     denominator = 0.6261 + (Stk**1.00493)
     if denominator == 0: # Avoid division by zero
@@ -471,8 +472,6 @@ def mesh_pad_efficiency_func(dp_fps, V_g_eff_sep_fps, rho_l_fps, rho_g_fps, mu_g
     # Eq. 14: Mesh-pad removal efficiency
     # Note: The article's Eq. 14 is E_pad = 1 - e^(-0.0238 * S * T * Ew) (typo in article, should be -0.0238*S*T*Ew)
     # Based on Carpenter and Othmer (1955), the exponent should be - (some constant) * S * T * Ew
-    # The image of Eq. 14 shows "1-e^(-0.0238STEW)" which seems to imply S*T*Ew is the argument.
-    # Let's assume the formula is: E_pad = 1 - exp(-Constant * S * T * Ew)
     # The constant 0.0238 is for FPS units.
     exponent = -0.0238 * specific_surface_area_fps * pad_thickness_fps * Ew
     E_pad = 1 - np.exp(exponent)
@@ -750,31 +749,35 @@ def _calculate_and_apply_separation(
                 })
 
             else: # For mist extractor stage (no extra details needed for table)
-                if separation_stage_efficiency_func == mesh_pad_efficiency_func:
-                    efficiency, Stk, Ew = separation_stage_efficiency_func(
-                        dp_fps=dp,
-                        V_g_eff_sep_fps=V_g_eff_sep_fps,
-                        rho_l_fps=rho_l_fps,
-                        rho_g_fps=rho_g_fps,
-                        mu_g_fps=mu_g_fps,
-                        **kwargs_for_efficiency_func
-                    )
-                    E_pad = efficiency # For mesh pad, efficiency is E_pad
-                    mist_extractor_details_table_data.append({
-                        "dp_microns": dp * FT_TO_MICRON,
-                        "Stokes Number": Stk,
-                        "Ew": Ew,
-                        "Epad": E_pad
-                    })
-                else: # For Vane-Type or Cyclonic, just calculate efficiency
-                    efficiency = separation_stage_efficiency_func(
-                        dp_fps=dp,
-                        V_g_eff_sep_fps=V_g_eff_sep_fps,
-                        rho_l_fps=rho_l_fps,
-                        rho_g_fps=rho_g_fps,
-                        mu_g_fps=mu_g_fps,
-                        **kwargs_for_efficiency_func
-                    )
+                # Only calculate and append if the droplet was NOT 100% removed in the previous gravity section
+                if initial_entrained_mass_flow_rate_per_dp[i] > 1e-9: # Check if there's still mass flow for this droplet size
+                    if separation_stage_efficiency_func == mesh_pad_efficiency_func:
+                        efficiency, Stk, Ew = separation_stage_efficiency_func(
+                            dp_fps=dp,
+                            V_g_eff_sep_fps=V_g_eff_sep_fps,
+                            rho_l_fps=rho_l_fps,
+                            rho_g_fps=rho_g_fps,
+                            mu_g_fps=mu_g_fps,
+                            **kwargs_for_efficiency_func
+                        )
+                        E_pad = efficiency # For mesh pad, efficiency is E_pad
+                        mist_extractor_details_table_data.append({
+                            "dp_microns": dp * FT_TO_MICRON,
+                            "Stokes Number": Stk,
+                            "Ew": Ew,
+                            "Epad": E_pad
+                        })
+                    else: # For Vane-Type or Cyclonic, just calculate efficiency
+                        efficiency = separation_stage_efficiency_func(
+                            dp_fps=dp,
+                            V_g_eff_sep_fps=V_g_eff_sep_fps,
+                            rho_l_fps=rho_l_fps,
+                            rho_g_fps=rho_g_fps,
+                            mu_g_fps=mu_g_fps,
+                            **kwargs_for_efficiency_func
+                        )
+                else: # If droplet was removed by gravity, its efficiency in ME is 100% and no further calculation is needed
+                    efficiency = 1.0
             
             # Ensure efficiency is between 0 and 1
             efficiency = max(0.0, min(1.0, efficiency))
@@ -1418,8 +1421,8 @@ if page == "Input Parameters":
                     # Apply liquid load deration to K_s
                     base_Ks_ft_sec = st.session_state.calculation_results['mesh_pad_base_Ks_ft_sec']
                     corrected_Ks_pressure_derated = st.session_state.calculation_results['mesh_pad_corrected_Ks_pressure_derated']
-                    base_liquid_load_capacity_gal_min_ft2 = st.session_state.calculation_results['mesh_pad_base_liquid_load_capacity_gal_min_ft2']
-
+                    base_liquid_load_capacity_gal_min_ft2 = mesh_pad_params["liquid_load_gal_min_ft2"] # Use base capacity from params
+                    
                     Ks_fully_corrected = corrected_Ks_pressure_derated
                     if current_liquid_load_gal_min_ft2 > base_liquid_load_capacity_gal_min_ft2:
                         excess_load = current_liquid_load_gal_min_ft2 - base_liquid_load_capacity_gal_min_ft2
@@ -1682,7 +1685,7 @@ elif page == "Calculation Steps":
             
             # Display detailed table for mesh pad separation
             if st.session_state.calculation_results and st.session_state.calculation_results['mist_extractor_details_table_data']:
-                st.markdown("##### Detailed Droplet Separation Performance in Mesh Pad")
+                st.markdown("##### Detailed Droplet Separation Performance in Mesh Pad (for droplets not removed by gravity)")
                 me_table_df = pd.DataFrame(st.session_state.calculation_results['mist_extractor_details_table_data'])
                 st.dataframe(me_table_df.style.format({
                     "dp_microns": "{:.2f}",
@@ -1691,7 +1694,7 @@ elif page == "Calculation Steps":
                     "Epad": "{:.2%}"
                 }))
             else:
-                st.info("Detailed droplet separation data for mesh pad not available.")
+                st.info("Detailed droplet separation data for mesh pad not available (or all droplets were removed by gravity).")
 
 
         elif inputs['mist_extractor_type'] == "Vane-Type":
@@ -1892,7 +1895,7 @@ elif page == "Droplet Distribution Results":
                             # Apply liquid load deration to K_s
                             base_Ks_ft_sec = st.session_state.calculation_results['mesh_pad_base_Ks_ft_sec']
                             corrected_Ks_pressure_derated = st.session_state.calculation_results['mesh_pad_corrected_Ks_pressure_derated']
-                            base_liquid_load_capacity_gal_min_ft2 = st.session_state.calculation_results['mesh_pad_base_liquid_load_capacity_gal_min_ft2']
+                            base_liquid_load_capacity_gal_min_ft2 = mesh_pad_params["liquid_load_gal_min_ft2"] # Use base capacity from params
 
                             Ks_fully_corrected = corrected_Ks_pressure_derated
                             if current_liquid_load_gal_min_ft2 > base_liquid_load_capacity_gal_min_ft2:
