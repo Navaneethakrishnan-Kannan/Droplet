@@ -693,7 +693,7 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     pdf.chapter_body("Step 3: Calculate Inlet Momentum (rho_g V_g^2)")
     pdf.set_font('Arial', '', 10)
     pdf.chapter_body(f"Equation: rho_g V_g^2 = rho_g * V_g^2")
-    pdf.chapter_body(f"Calculation (FPS): rho_g V_g^2 = {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft^3 * ({to_fps(inputs['V_g_input'], 'velocity'):.2f} ft/sec)^2 = {results['rho_v_squared_fps']:.2f} lb/ft-sec^2")
+    pdf.chapter_body(f"Calculation (FPS): rho_g V_g^2 = {to_fps(inputs['rho_g_input'], 'density'):.4f} lb/ft^3 * ({to_fps(inputs['V_g_input'], 'velocity'):.2f}^2) = {results['rho_v_squared_fps']:.2f} lb/ft-sec^2")
     pdf.chapter_body(f"Result: Inlet Momentum (rho_g V_g^2) = {from_fps(results['rho_v_squared_fps'], 'momentum'):.2f} {momentum_unit_pdf}")
     pdf.ln(5)
 
@@ -763,6 +763,39 @@ def generate_pdf_report(inputs, results, plot_image_buffer_original, plot_image_
     pdf.chapter_body(f"Total Entrained Liquid Mass Flow Rate After Gravity Settling: {plot_data_after_gravity['total_entrained_mass_flow_rate_si']:.4f} {mass_flow_unit_pdf}")
     pdf.chapter_body(f"Total Entrained Liquid Volume Flow Rate After Gravity Settling: {plot_data_after_gravity['total_entrained_volume_flow_rate_si']:.6f} {vol_flow_unit_pdf}")
     pdf.ln(5)
+
+    # Debug print statement for PDF generation context
+    print(f"PDF Gen: Length of gravity_details_table_data: {len(plot_data_after_gravity['gravity_details_table_data']) if plot_data_after_gravity and 'gravity_details_table_data' in plot_data_after_gravity else 'N/A'}")
+
+    # Display detailed table for gravity separation
+    if plot_data_after_gravity and plot_data_after_gravity['gravity_details_table_data']:
+        pdf.set_font('Arial', 'B', 10)
+        # Add a new page if the table might overflow
+        if pdf.get_y() + 10 + (len(plot_data_after_gravity['gravity_details_table_data']) + 1) * 6 > pdf.page_break_trigger:
+            pdf.add_page()
+            pdf.chapter_title('2. Step-by-Step Calculation Results (Continued)') # Add a continued title
+            pdf.ln(5) # Some space after continued title
+
+        pdf.add_table(
+            headers=["Droplet Size (um)", "Vt (ft/s)", "Cd", "Re_p", "Flow Regime", "Time Settle (s)", "h_max_settle (ft)", "Edp"],
+            data=[
+                [
+                    f"{row_dict['dp_microns']:.2f}",
+                    f"{row_dict['Vt_ftps']:.4f}",
+                    f"{row_dict['Cd']:.4f}",
+                    f"{row_dict['Re_p']:.2e}",
+                    row_dict['Flow Regime'],
+                    f"{row_dict['Time Settle (s)']:.4f}",
+                    f"{row_dict['h_max_settle (ft)']:.4f}",
+                    f"{row_dict['Edp']:.2%}"
+                ] for row_dict in plot_data_after_gravity['gravity_details_table_data']
+            ],
+            col_widths=[25, 20, 15, 20, 25, 25, 25, 15], # Adjust these widths as needed
+            title='Detailed Droplet Separation Performance in Gas Gravity Section'
+        )
+    else:
+        pdf.chapter_body("Detailed droplet separation data for gravity section not available.")
+    pdf.ln(5) # Add spacing after the table or message
 
     # Step 9: Mist Extractor Performance
     pdf.set_font('Arial', 'B', 10)
